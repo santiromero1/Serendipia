@@ -8,7 +8,7 @@
 
 Serendipia es una plataforma web de curación musical inteligente para DJs. Permite enriquecer una biblioteca musical con metadatos automáticos generados por IA, visualizarla como una red de conexiones y consultarla en lenguaje natural para preparar sets.
 
-**Stack:** React + Tailwind · Node.js · Supabase · Spotify Web API · Claude API · D3.js
+**Stack:** React + Tailwind · Node.js · Supabase · Spotify (identidad) · GetSongBPM (BPM/clave) · Claude API · D3.js
 
 ---
 
@@ -58,8 +58,9 @@ Serendipia es una plataforma web de curación musical inteligente para DJs. Perm
        │              │
 ┌──────▼──────┐ ┌─────▼──────────┐
 │  Supabase   │ │  External APIs  │
-│  PostgreSQL │ │  Spotify API    │
-│  Auth       │ │  Claude API     │
+│  PostgreSQL │ │  Spotify (id)   │
+│  Auth       │ │  GetSongBPM     │
+│             │ │  Claude API     │
 └─────────────┘ └────────────────┘
 ```
 
@@ -70,24 +71,27 @@ Serendipia es una plataforma web de curación musical inteligente para DJs. Perm
 ### Tabla `tracks`
 ```sql
 id              UUID PRIMARY KEY
-user_id         UUID REFERENCES users(id)
+user_id         UUID REFERENCES auth.users(id)
 title           TEXT NOT NULL
 artist          TEXT NOT NULL
 bpm             INTEGER
 key_camelot     TEXT           -- e.g. "8A", "11B"
 key_standard    TEXT           -- e.g. "Am", "F#"
-energy          DECIMAL(3,2)   -- 0.00 a 1.00
-danceability    DECIMAL(3,2)
-valence         DECIMAL(3,2)   -- mood: sad → happy
+energy          DECIMAL(4,3)   -- 0.000 a 1.000
+danceability    DECIMAL(4,3)
+valence         DECIMAL(4,3)   -- mood: sad → happy
 year            INTEGER
 genre           TEXT[]
 duration_ms     INTEGER
 spotify_id      TEXT
-source          TEXT           -- 'spotify' | 'manual' | 'ai_inferred'
-metadata_status TEXT           -- 'pending' | 'enriched' | 'manual'
+notes           TEXT           -- notas personales del DJ
+metadata_status TEXT           -- 'pending' | 'enriched' | 'ai_inferred' | 'manual'
+metadata_source TEXT           -- 'spotify' | 'getsongbpm' | 'ai' | 'manual' | 'rekordbox'
 created_at      TIMESTAMPTZ
 updated_at      TIMESTAMPTZ
 ```
+
+> `metadata_status` describe el grado de completitud; `metadata_source` indica de dónde salió el dato DJ-crítico (BPM/clave). Esquema alineado con `5-api.md` §2 y la migración de `7-impl.md` §2.2.
 
 ### Tabla `track_tags`
 ```sql
@@ -119,14 +123,16 @@ PRIMARY KEY (playlist_id, track_id)
 ### Tabla `connections` *(Fase 2)*
 ```sql
 id              UUID PRIMARY KEY
-track_a_id      UUID REFERENCES tracks(id)
+track_a_id      UUID REFERENCES tracks(id)   -- orden canónico: track_a_id < track_b_id
 track_b_id      UUID REFERENCES tracks(id)
 score           DECIMAL(4,3)   -- compatibilidad 0 a 1
 bpm_diff        INTEGER
 key_compatible  BOOLEAN
-energy_diff     DECIMAL(3,2)
+energy_diff     DECIMAL(4,3)
 created_at      TIMESTAMPTZ
 ```
+
+> Para evitar conexiones duplicadas (a→b y b→a), se guarda una sola fila con `track_a_id < track_b_id` (orden canónico por UUID) + índice único `(track_a_id, track_b_id)`.
 
 ---
 
@@ -138,18 +144,20 @@ created_at      TIMESTAMPTZ
 
 **Descripción:** El usuario puede agregar tracks a su biblioteca ingresando nombre del artista y título de la canción.
 
-**Flujo:**
+**Flujo (pipeline híbrido):**
 1. Usuario ingresa `artista` + `título` en el formulario
-2. Sistema llama a Spotify Search API
-3. Si hay match → extrae metadatos automáticamente
-4. Si no hay match → llama a Claude API para inferir metadatos
-5. Track queda en estado `enriched` o `ai_inferred`
-6. Usuario puede editar manualmente cualquier campo
+2. Sistema busca en **Spotify** → identidad del track (título canónico, año, duración, género, portada, `spotify_id`)
+3. Sistema consulta **GetSongBPM** → BPM + clave musical
+4. Campos DJ que falten (energy/danceability, o BPM/clave si GetSongBPM no tuvo match) → **Claude** los infiere
+5. Track queda en estado `enriched` (datos de APIs) o `ai_inferred` (Claude cubrió BPM/clave)
+6. Los **DJ tags se generan en background** (no bloquean la respuesta)
+7. Usuario puede editar manualmente cualquier campo
 
 **Criterios de aceptación:**
-- [ ] Carga individual funciona en < 3 segundos
+- [ ] Los metadatos (BPM, clave, energía) se resuelven en **≤ 4 segundos** y la respuesta los incluye
+- [ ] Los DJ tags aparecen poco después (generación async), sin bloquear el guardado
 - [ ] Carga masiva vía CSV (columnas: título, artista) funciona para hasta 500 tracks
-- [ ] El estado `metadata_status` refleja correctamente la fuente
+- [ ] `metadata_status` y `metadata_source` reflejan correctamente el grado y la fuente
 - [ ] El usuario puede editar cualquier campo manualmente
 - [ ] Tracks duplicados muestran advertencia antes de guardar
 
@@ -157,32 +165,25 @@ created_at      TIMESTAMPTZ
 ```
 POST /api/tracks
 Body: { title: string, artist: string }
-Response: Track object con metadatos completos
+Response: Track con metadatos enriquecidos (tags se completan async)
 ```
 
 ---
 
-### F-02: Enriquecimiento de Metadatos via Spotify API
+### F-02: Enriquecimiento de Metadatos (pipeline híbrido)
 
-**Descripción:** El sistema consulta Spotify Web API para obtener audio features del track.
+> **Contexto importante:** Spotify **deprecó el endpoint `audio-features`** (BPM, key, energy, danceability, valence) para apps nuevas en nov-2024. Por eso el enriquecimiento es híbrido y reparte responsabilidades entre tres fuentes.
 
-**Datos obtenidos de Spotify:**
-```javascript
-{
-  bpm: number,              // tempo
-  key: number,              // 0-11 (C=0, C#=1, ...)
-  mode: number,             // 0=minor, 1=major
-  energy: number,           // 0.0-1.0
-  danceability: number,     // 0.0-1.0
-  valence: number,          // 0.0-1.0
-  duration_ms: number,
-  year: string,             // desde album release_date
-  genres: string[]          // desde artist object
-}
-```
+| Fuente | Aporta | Notas |
+|--------|--------|-------|
+| **Spotify** (search + track/artist) | Título canónico, año, duración, género, portada, `spotify_id` | Solo identidad/catálogo. **No** da audio-features. Género viene del *artist object* y suele venir incompleto. |
+| **GetSongBPM** | BPM + clave musical | Fuente dedicada de datos DJ. Buena cobertura para tracks comerciales/conocidos. |
+| **Claude** (fallback) | Lo que falte: energy, danceability, valence; y BPM/clave de tracks underground/edits sin match | Único camino para bootlegs sin presencia en APIs. Prompt estructurado, salida JSON validada. |
 
 **Conversión de key a Camelot:**
 ```javascript
+// La clave llega como par (key 0-11, mode 0/1) estilo Spotify, o como
+// string musical desde GetSongBPM/Claude. utils/camelot la normaliza a Camelot.
 const CAMELOT = {
   // { key: mode } -> camelot
   '0-1': '8B', '1-1': '3B', '2-1': '10B', // ...major
@@ -191,10 +192,10 @@ const CAMELOT = {
 }
 ```
 
-**Fallback si Spotify no encuentra el track:**
-- Llamar a Claude API con prompt estructurado para inferir metadatos
-- Marcar `source: 'ai_inferred'` y mostrar badge visual al usuario
-- Permitir corrección manual
+**Estado resultante:**
+- Si BPM/clave vienen de GetSongBPM → `metadata_status: 'enriched'`, `metadata_source: 'getsongbpm'`
+- Si Claude tuvo que inferir BPM/clave → `metadata_status: 'ai_inferred'`, `metadata_source: 'ai'`, badge visual `~ IA`
+- El usuario siempre puede corregir manualmente (pasa a `manual`)
 
 ---
 
@@ -286,7 +287,7 @@ Respondé SOLO con un array JSON. Ejemplo: ["peak", "explotarla"]
 - [ ] Proceso de enriquecimiento es asincrónico con barra de progreso
 - [ ] Tracks duplicados no se reimportan (detectados por título+artista)
 - [ ] Metadatos existentes de Rekordbox se respetan y complementan
-- [ ] Importación de 1000 tracks completa en < 5 minutos
+- [ ] Importación de 1000 tracks completa en < 10 minutos (enriquecimiento async vía GetSongBPM + Claude, en lotes con rate-limit)
 
 ---
 
@@ -319,7 +320,7 @@ Respondé SOLO con un array JSON. Ejemplo: ["peak", "explotarla"]
 // Score de compatibilidad entre dos tracks (0 a 1)
 function compatibilityScore(trackA, trackB) {
   const bpmScore = 1 - Math.min(Math.abs(trackA.bpm - trackB.bpm), 8) / 8
-  const keyScore = camelotCompatibility(trackA.key_camelot, trackB.key_camelot) // 0 o 1
+  const keyScore = camelotCompatibilityScore(trackA.key_camelot, trackB.key_camelot) // 1.0 / 0.8 / 0
   const energyScore = 1 - Math.abs(trackA.energy - trackB.energy)
   
   return (bpmScore * 0.4) + (keyScore * 0.4) + (energyScore * 0.2)
@@ -432,7 +433,7 @@ POST   /api/chat               → Query conversacional
 ### Fase 1 — MVP (Semanas 1–6)
 - [ ] Setup proyecto: repo, Supabase, auth básica
 - [ ] Modelo de datos: tracks, tags, playlists
-- [ ] Integración Spotify API + sistema de enriquecimiento
+- [ ] Integración Spotify (identidad) + GetSongBPM (BPM/clave) + Claude (fallback) — pipeline de enriquecimiento
 - [ ] Generación de etiquetas DJ con Claude API
 - [ ] Biblioteca visual con filtros
 - [ ] Importación Rekordbox XML
@@ -470,8 +471,9 @@ POST   /api/chat               → Query conversacional
 | Frontend | React + Tailwind CSS | Ecosistema amplio, rápido de iterar |
 | Backend | Node.js + Express | JavaScript full-stack, buena integración con APIs externas |
 | Base de datos | Supabase (PostgreSQL) | Auth incluida, real-time, generous free tier |
-| Música API | Spotify Web API | Mayor cobertura de tracks y audio features |
-| IA | Claude API (claude-sonnet-4-20250514) | Mejor comprensión de lenguaje natural y contexto largo |
+| Música API (identidad) | Spotify Web API | Mayor cobertura de catálogo para matching (título, año, género, portada). Nota: audio-features deprecado para apps nuevas. |
+| Datos DJ (BPM/clave) | GetSongBPM API | Fuente dedicada de BPM y clave musical, reemplaza los audio-features de Spotify |
+| IA | Claude API (`claude-sonnet-4-6` inferencia/chat, `claude-haiku-4-5` tags) | Comprensión de lenguaje natural, contexto largo, y fallback de metadatos para underground |
 | Grafo | D3.js | Control total sobre visualización, sin abstracciones |
 | Hosting | Vercel (frontend) + Railway (backend) | Deploy simple, escala automática |
 | CI/CD | GitHub Actions | Estándar, integración nativa con Vercel |
@@ -485,7 +487,8 @@ POST   /api/chat               → Query conversacional
 - Spotify tokens manejados server-side, nunca expuestos al cliente
 - Claude API key solo en backend, nunca en frontend
 - No se almacenan archivos de audio, solo metadatos y referencias
-- GDPR: opción de exportar y eliminar todos los datos del usuario
+- GDPR — **eliminación:** borrar la cuenta en Supabase Auth elimina en cascada tracks, tags, playlists y jobs (`ON DELETE CASCADE` en todas las FK a `auth.users`)
+- GDPR — **exportación:** endpoint `GET /auth/me/export` (devuelve toda la biblioteca del usuario en JSON). *Implementación: Fase 1 tardía / Fase 2.*
 
 ---
 

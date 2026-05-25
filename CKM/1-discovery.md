@@ -81,10 +81,10 @@ DJoid valida que el mercado existe y busca estas herramientas. Con muy poca trac
 ## 5. La Solución — Tres Pilares
 
 ### 🧠 Pilar 1: Cerebro (Metadatos automáticos)
-Ingresás el nombre del track + artista. La IA consulta Spotify API y genera automáticamente:
-- BPM, clave musical (Camelot Wheel), energía, danceability, año, género
-- Etiquetas contextuales de DJ: `#explotarla` `#calentar` `#cierre` `#peak` `#emotional`
-- Funciona con tracks underground, edits y bootlegs donde no hay archivo
+Ingresás el nombre del track + artista. El sistema combina varias fuentes y genera automáticamente:
+- BPM y clave musical (Camelot Wheel) vía **GetSongBPM**; identidad, año y género vía **Spotify**; energía/danceability vía **Claude**
+- Etiquetas contextuales de DJ: `#explotarla` `#calentar` `#cierre` `#peak` `#emotional` (generadas por Claude)
+- Funciona con tracks underground, edits y bootlegs donde no hay archivo ni datos en APIs: **Claude infiere los metadatos** — es el único camino para esos casos
 
 ### 🕸️ Pilar 2: Red (Grafo de conexiones)
 Visualización interactiva donde:
@@ -149,7 +149,8 @@ Rekordbox no tiene API pública oficial. Las opciones de integración son:
 
 | Riesgo | Probabilidad | Mitigación |
 |--------|-------------|-----------|
-| Spotify cierra/limita su API | Media | Integrar AudD o MusicBrainz como fallback |
+| Spotify ya deprecó audio-features (BPM/clave/energía) para apps nuevas | Resuelto | Arquitectura híbrida: GetSongBPM para BPM/clave, Claude para el resto; Spotify solo para identidad |
+| GetSongBPM limita o cae | Media | Fallback a Claude (ya en el pipeline); evaluar MusicBrainz/AcousticBrainz como segunda fuente |
 | Pioneer abre Rekordbox API | Baja | Adoptarla inmediatamente como ventaja |
 | DJoid mejora con IA conversacional | Media | Velocidad de ejecución + mejor UX |
 | Baja adopción por precio | Media | Freemium con límite de tracks |

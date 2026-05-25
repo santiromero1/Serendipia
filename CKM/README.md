@@ -16,7 +16,7 @@ Serendipia lo hace.
 
 ## Los tres pilares
 
-**🧠 Cerebro** — Ingresás el nombre de una canción. La IA genera BPM, clave, energía, género y etiquetas de momento de DJ (`#peak`, `#explotarla`, `#cierre`) automáticamente. Sin necesitar el archivo de audio.
+**🧠 Cerebro** — Ingresás el nombre de una canción. El sistema genera BPM, clave, energía, género y etiquetas de momento de DJ (`#peak`, `#explotarla`, `#cierre`) automáticamente, combinando Spotify, GetSongBPM y Claude. Sin necesitar el archivo de audio.
 
 **🕸️ Red** — Tu biblioteca visualizada como un grafo de nodos. Los tracks se conectan por compatibilidad armónica, BPM y energía. Descubrís relaciones que nunca hubieras visto en una lista.
 
@@ -31,7 +31,8 @@ Serendipia lo hace.
 | Frontend | React + Tailwind CSS |
 | Backend | Node.js + Express |
 | Base de datos | Supabase (PostgreSQL) |
-| Música API | Spotify Web API |
+| Música API (identidad) | Spotify Web API |
+| Datos DJ (BPM/clave) | GetSongBPM API |
 | IA | Claude API (Anthropic) |
 | Grafo | D3.js |
 | Hosting | Vercel + Railway |
@@ -82,19 +83,22 @@ Impl       →  Validation  →  Release
 ```
 serendipia/
 ├── README.md               ← Este archivo
-├── CKM/                    ← Collective Knowledge Management
+├── CKM/                    ← Collective Knowledge Management (specs)
 │   ├── README.md           ← Índice y guía de uso
-│   ├── DISCOVERY.md        ← Visión, problema, usuario, mercado
-│   ├── PRD.md              ← Requerimientos y specs técnicos
-│   ├── DESIGN.md           ← (próximo) Flujos y sistema de diseño
-│   ├── TECHNICAL.md        ← (próximo) Arquitectura y decisiones
-│   ├── API.md              ← (próximo) Contratos de API
-│   └── TEST.md             ← (próximo) Casos de prueba
+│   ├── 1-discovery.md      ← Visión, problema, usuario, mercado
+│   ├── 2-prd.md            ← Requerimientos y modelo de datos
+│   ├── 3-design.md         ← Flujos y sistema de diseño
+│   ├── 4-technical.md      ← Arquitectura y decisiones técnicas
+│   ├── 5-api.md            ← Contratos de API
+│   ├── 6-test.md           ← Casos de prueba
+│   ├── 7-impl.md           ← Plan de implementación
+│   ├── 8-validation.md     ← QA y validación
+│   └── 9-release.md        ← Deploy, versioning, rollback
 ├── apps/
 │   ├── web/                ← Frontend React
 │   └── api/                ← Backend Node.js
 ├── packages/
-│   └── shared/             ← Tipos y utilidades compartidas
+│   └── types/              ← @serendipia/types (tipos compartidos)
 └── docs/                   ← Documentación técnica adicional
 ```
 
@@ -122,19 +126,21 @@ npm run dev
 
 ## Estado actual del proyecto
 
-| Fase | Estado |
-|------|--------|
-| Discovery | ✅ Completo |
-| PRD | ✅ Completo |
-| Design | 🔲 Pendiente |
-| `GATE 1` | 🔲 Pendiente |
-| Technical Spec | 🔲 Pendiente |
-| API Spec | 🔲 Pendiente |
-| Test Spec | 🔲 Pendiente |
-| `GATE 2` | 🔲 Pendiente |
-| Implementation | 🔲 Pendiente |
-| Validation | 🔲 Pendiente |
-| Release | 🔲 Pendiente |
+| Fase | Spec | Ejecución |
+|------|------|-----------|
+| Discovery | ✅ Completo | — |
+| PRD | ✅ Completo | — |
+| Design | ✅ Completo | — |
+| `GATE 1` | — | 🔲 Sign-off pendiente |
+| Technical Spec | ✅ Completo | — |
+| API Spec | ✅ Completo | — |
+| Test Spec | ✅ Completo | — |
+| `GATE 2` | — | 🔲 Sign-off pendiente |
+| Implementation | ✅ Spec listo | 🔲 No iniciada |
+| Validation | ✅ Spec listo | 🔲 No iniciada |
+| Release | ✅ Spec listo | 🔲 No iniciada |
+
+> Los 9 specs están escritos y reconciliados entre sí. Próximo paso: firmar Gate 1 y Gate 2, luego arrancar el Sprint 1 de [7-impl.md](7-impl.md).
 
 ---
 
@@ -143,8 +149,8 @@ npm run dev
 Si estás usando este repo con Claude Code o Cursor, empezá siempre con:
 
 ```
-Leé los archivos en /CKM antes de responder cualquier pregunta sobre este proyecto.
-DISCOVERY.md tiene la visión y estrategia. PRD.md tiene los specs técnicos completos.
+Leé los archivos en /CKM (1-discovery.md … 9-release.md) antes de responder cualquier pregunta sobre este proyecto.
+1-discovery.md tiene la visión y estrategia; 2-prd.md los requerimientos; 4-technical.md / 5-api.md los specs técnicos.
 Este proyecto sigue Spec Driven Design: nada se implementa sin spec aprobado en /CKM.
 ```
 
