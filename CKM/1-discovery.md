@@ -67,7 +67,7 @@ Un DJ profesional o semi-profesional maneja bibliotecas de entre 5.000 y 50.000 
 
 | Plataforma | Fortaleza | Limitación clave |
 |-----------|-----------|-----------------|
-| **DJoid** | Grafo visual, análisis de audio automático | Requiere archivo físico, sin IA conversacional, ~33 usuarios activos visibles |
+| **DJoid** | Grafo visual, análisis de audio automático | **Requiere archivo físico siempre** (no sirve para tracks sin archivo), sin IA conversacional, ~33 usuarios activos visibles |
 | **Rekordbox** | Estándar de industria, integración Pioneer | Manual, cerrado, sin IA |
 | **Mixed In Key** | Análisis de clave y energía confiable | Solo análisis, sin curaduría ni red |
 | **Lexicon** | Gestión de metadata multi-plataforma | Sin grafo, sin IA conversacional |
@@ -75,6 +75,8 @@ Un DJ profesional o semi-profesional maneja bibliotecas de entre 5.000 y 50.000 
 
 ### Ventana de oportunidad
 DJoid valida que el mercado existe y busca estas herramientas. Con muy poca tracción visible, el espacio para entrar con una solución más completa y mejor diseñada está abierto. La IA generativa habilita hoy lo que era imposible hace 2 años.
+
+**Diferenciador clave vs DJoid:** DJoid *exige* el archivo de audio para todo. Serendipia funciona en ambos mundos — si el DJ sube el archivo, hace **análisis de audio (DSP)** igual de preciso; si no lo tiene (underground, bootlegs, edits), igual enriquece vía Spotify + GetSongBPM + Claude. Cobertura total + análisis de señal cuando hay archivo, sumado a la IA conversacional y los DJ tags que DJoid no tiene.
 
 ---
 

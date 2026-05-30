@@ -306,13 +306,16 @@ Un DJ puede registrarse, agregar un track a mano y verlo en su biblioteca. Deplo
 [ ] 2.3 Backend: Claude service (inferencia de fallback + generate DJ tags)
 [ ] 2.4 Backend: Enrichment pipeline híbrido integrado en POST /tracks (Spotify → GetSongBPM → Claude fallback; tags async)
 [ ] 2.5 Backend: Fallback a Claude para campos sin match (energy/danceability, o BPM/clave underground)
-[ ] 2.6 Backend: PUT /tracks/:id (edición manual)
+[ ] 2.6 Backend: PUT /tracks/:id (edición manual, incluye rating)
 [ ] 2.7 Backend: DELETE /tracks/:id
 [ ] 2.8 Backend: POST /tracks/:id/tags + DELETE /tracks/:id/tags/:tagId
-[ ] 2.9 Frontend: Track card completa (BPM, clave, energía, tags, badge de fuente)
-[ ] 2.10 Frontend: Panel lateral "Agregar track" con preview de metadatos
-[ ] 2.11 Frontend: Badge visual según metadata_status
-[ ] 2.12 Frontend: Edición inline de campos de un track
+[ ] 2.9 Backend: POST /tracks/upload (multer + Supabase Storage + music-metadata para format/bitrate)
+[ ] 2.10 Backend: Worker de análisis de audio DSP (BPM/energy/danceability), async + fallback a APIs
+[ ] 2.11 Frontend: Track card completa (BPM, clave, energía, dance, emotion ↑/↓, rating, tags, badge de fuente)
+[ ] 2.12 Frontend: Estrellas de rating editables in-place
+[ ] 2.13 Frontend: Panel lateral "Agregar track" — modo búsqueda y modo subir archivo (drag&drop)
+[ ] 2.14 Frontend: Badge visual según metadata_status (incluye `audio_analysis`)
+[ ] 2.15 Frontend: Edición inline de campos de un track
 ```
 
 **Definition of Done del Sprint 2:**
@@ -331,7 +334,7 @@ Agregás "Sandstorm - Darude" y en menos de 5 segundos ves BPM 136, clave Bbm, e
 [ ] 3.4 Backend: GET /tracks/import/jobs/:jobId (polling)
 [ ] 3.5 Backend: CRUD completo de playlists
 [ ] 3.6 Backend: GET /playlists/:id/export (XML + M3U)
-[ ] 3.7 Frontend: Sidebar de filtros (BPM slider, Camelot picker, energía, tags)
+[ ] 3.7 Frontend: Sidebar de filtros (rueda Camelot, BPM/energía/danceability/emotion sliders, rating, tags, formato/bitrate)
 [ ] 3.8 Frontend: Filtros con debounce + URL state (compartibles)
 [ ] 3.9 Frontend: Vista lista compacta (toggle grid/lista)
 [ ] 3.10 Frontend: Modal de importación XML con barra de progreso (polling)
@@ -351,7 +354,7 @@ Importás tu biblioteca de Rekordbox, la filtrás por BPM + clave, armás un set
 > No arrancar hasta que Fase 1 esté deployed y validado con usuarios reales.
 
 ```
-[ ] 4.1 Backend: Algoritmo de compatibilityScore (bpm + camelot + energy)
+[ ] 4.1 Backend: Algoritmo de compatibilityScore (bpm + camelot + energy + danceability + emotion/valence, con renormalización si hay nulls)
 [ ] 4.2 Backend: Job de cálculo de conexiones (batch, post-import)
 [ ] 4.3 Backend: GET /tracks/:id/connections
 [ ] 4.4 Backend: POST /connections/compute
@@ -500,7 +503,10 @@ Antes de considerar una tarea del sprint como "done":
 | Decisión | Detalle |
 |---------|---------|
 | Auth | Supabase Auth. Backend crea cliente Supabase **por-request con el JWT del usuario** (RLS aplica). `service_role` solo en workers de background, filtrando `user_id` a mano. |
-| Fuente de metadatos | Híbrida: Spotify (identidad) → GetSongBPM (BPM/clave) → Claude (fallback). Spotify audio-features NO se usa (deprecado). |
+| Fuente de metadatos | Híbrida con prioridad: **Análisis DSP** (si hay archivo) → GetSongBPM (BPM/clave) → Claude (fallback), + Spotify para identidad. Spotify audio-features NO se usa (deprecado). |
+| Análisis de audio | Solo si el DJ sube el archivo (`POST /tracks/upload`). Mide BPM/energy/danceability de la waveform; corre async en worker. Sin archivo, se usa el camino de APIs. |
+| Rating | Dato del DJ (1–5 estrellas), editable siempre, no afecta `metadata_source`. |
+| Emotion | Es el render de `valence` como flecha ↑/↓. No es un campo nuevo. |
 | Enriquecimiento | Metadatos **síncronos ≤ 4s** (Spotify + GetSongBPM + Claude fallback). DJ tags **async en background**. Import masivo: todo async con job. |
 | Progreso de import | Polling cada 2s a `GET /tracks/import/jobs/:jobId`. Sin WebSockets en MVP. |
 | Camelot | Tabla estática hardcodeada + score graduado (1.0 / 0.8 / 0). No librería externa. |

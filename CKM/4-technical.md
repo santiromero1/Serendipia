@@ -34,15 +34,17 @@
 │         Zod validation · Winston logs · JWT auth        │
 └──────┬────────────────────────────────┬─────────────────┘
        │                                │
-┌──────▼──────────┐          ┌──────────▼──────────────┐
-│    Supabase     │          │     APIs Externas        │
-│  PostgreSQL     │          │                          │
-│  Auth (JWT)     │          │  Spotify  (identidad)    │
-│  Storage        │          │  GetSongBPM (BPM/clave)  │
-│  Row Level Sec. │          │  Anthropic Claude        │
-│                 │          │   (fallback + DJ tags)   │
-└─────────────────┘          └──────────────────────────┘
+┌──────▼──────────┐  ┌──────────────────┐  ┌──────────▼──────────────┐
+│    Supabase     │  │  Audio Analysis  │  │     APIs Externas        │
+│  PostgreSQL     │  │   (DSP) worker   │  │                          │
+│  Auth (JWT)     │  │                  │  │  Spotify  (identidad)    │
+│  Storage (audio)│◀─│  BPM · energy ·  │  │  GetSongBPM (BPM/clave)  │
+│  Row Level Sec. │  │  danceability    │  │  Anthropic Claude        │
+│                 │  │  format/bitrate  │  │   (fallback + DJ tags)   │
+└─────────────────┘  └──────────────────┘  └──────────────────────────┘
 ```
+
+> El **Audio Analysis worker** solo entra en juego cuando el DJ sube un archivo (`POST /tracks/upload`). Lee el archivo desde Storage, mide BPM/energy/danceability de la waveform y devuelve los valores con prioridad sobre las APIs. Sin archivo, el pipeline es 100% APIs + Claude (camino histórico).
 
 ---
 
@@ -74,6 +76,9 @@
 | node-xml2js | 0.6 | Parseo de XML de Rekordbox |
 | @anthropic-ai/sdk | latest | Claude API oficial (modelo `claude-sonnet-4-6` para inferencia/chat, `claude-haiku-4-5` para tags DJ de alto volumen) |
 | GetSongBPM API | REST | Fuente dedicada de BPM + clave musical. Cliente HTTP propio (no hay SDK oficial) |
+| Análisis de audio (DSP) | Essentia / aubio (binding nativo o WASM), o servicio dedicado | Mide BPM, energy, danceability de la waveform de archivos subidos. Corre en un worker/cola para no bloquear el request. Evaluar Essentia.js (WASM) vs binario nativo según tamaño de archivo y latencia. |
+| music-metadata | latest | Lee `format`, `bitrate` y tags ID3 del header del archivo subido |
+| multer | latest | Manejo de uploads `multipart/form-data` en Express |
 
 ### Base de Datos
 
@@ -232,6 +237,32 @@ Cliente              API            Spotify      GetSongBPM       Claude
 - Los **DJ tags (Claude) se generan en background**, no bloquean la respuesta. El track vuelve con `tags: []` y se completa a los pocos segundos (el cliente refetchea o usa optimistic UI).
 - Si Spotify no encuentra el track, igual se intenta GetSongBPM + Claude (camino underground).
 
+### 6.1b Upload con análisis de audio (DSP)
+
+Cuando el DJ sube el archivo, el DSP mide los datos DJ-críticos de la señal real y tiene **prioridad** sobre GetSongBPM/Claude.
+
+```
+Cliente              API           Storage      Audio worker (DSP)   Spotify/Claude
+   │                  │               │                │                  │
+   │─ POST /tracks/   │               │                │                  │
+   │   upload (file) ─▶│               │                │                  │
+   │                  │── put file ──▶│                │                  │   (1) guardar archivo
+   │                  │◀─ url ────────│                │                  │
+   │                  │── read header (format, bitrate, ID3) ─────────────│   (2) metadata de archivo
+   │                  │── INSERT track (status: pending) ─▶ (Supabase)    │
+   │◀─ 201 { track } ─│   (track creado; análisis en curso)               │
+   │                  │── analyze(url) ───────────────▶│                  │   (3) DSP async:
+   │                  │◀─ { bpm, energy, danceability }│                  │       mide waveform
+   │                  │── search identidad ──────────────────────────────▶│   (4) Spotify (paralelo)
+   │                  │── infer faltantes (valence...) ──────────────────▶│   (5) Claude si hace falta
+   │                  │── UPDATE track (source: audio_analysis) ─▶ (Supabase)
+   │   (el cliente refetchea GET /tracks/:id y ve los datos medidos)      │
+```
+
+- El análisis DSP puede tardar más que el presupuesto de ≤4s para archivos grandes → corre **async en un worker/cola**; el track se devuelve en `pending` y se completa con polling/refetch.
+- `format`/`bitrate` sí son inmediatos (solo lectura de header).
+- Si el DSP falla (`AUDIO_ANALYSIS_FAILED`), se cae al pipeline de APIs (GetSongBPM/Claude) como respaldo.
+
 **Manejo de rate limits:**
 - Spotify / GetSongBPM: para importaciones masivas, procesar en lotes de 20 con delay configurable (~700ms) entre lotes. Constante `SPOTIFY_RATE_LIMIT_MS`.
 - Claude: cola de prioridad. La inferencia de fallback y los tags se encolan; nunca bloquean el request del usuario.
@@ -326,6 +357,10 @@ export enum ErrorCode {
   SPOTIFY_NOT_FOUND   = 'SPOTIFY_NOT_FOUND',
   SPOTIFY_RATE_LIMIT  = 'SPOTIFY_RATE_LIMIT',
   METADATA_FAILED     = 'METADATA_FAILED',
+  // Upload / análisis de audio
+  FILE_TOO_LARGE      = 'FILE_TOO_LARGE',
+  UNSUPPORTED_FORMAT  = 'UNSUPPORTED_FORMAT',
+  AUDIO_ANALYSIS_FAILED = 'AUDIO_ANALYSIS_FAILED',
   // Import
   XML_PARSE_ERROR     = 'XML_PARSE_ERROR',
   XML_INVALID_FORMAT  = 'XML_INVALID_FORMAT',
@@ -358,6 +393,8 @@ CREATE INDEX idx_tracks_user_id ON tracks(user_id);
 CREATE INDEX idx_tracks_bpm ON tracks(bpm);
 CREATE INDEX idx_tracks_key_camelot ON tracks(key_camelot);
 CREATE INDEX idx_tracks_energy ON tracks(energy);
+CREATE INDEX idx_tracks_danceability ON tracks(danceability);
+CREATE INDEX idx_tracks_rating ON tracks(rating);
 CREATE INDEX idx_track_tags_track_id ON track_tags(track_id);
 CREATE INDEX idx_track_tags_tag ON track_tags(tag);
 ```
@@ -390,6 +427,8 @@ CREATE INDEX idx_track_tags_tag ON track_tags(tag);
 | Decisión | Alternativa descartada | Razón |
 |---------|----------------------|-------|
 | Metadatos híbridos: Spotify (identidad) + GetSongBPM (BPM/clave) + Claude (fallback + tags) | Solo Spotify | Spotify deprecó audio-features para apps nuevas; ninguna fuente sola cubre underground + datos precisos |
+| Análisis de audio (DSP) **opcional sobre archivo subido**, con prioridad sobre APIs | Exigir archivo siempre (como DJoid) / no analizar nunca | Con archivo medimos BPM/energy/danceability de la señal real (más preciso); sin archivo seguimos cubriendo underground vía APIs+Claude. Conserva la ventaja diferencial y suma precisión cuando hay archivo. |
+| `valence` se muestra como "Emotion" (flecha ↑/↓), sin campo nuevo | Modelar una "trayectoria" emocional aparte | El valor 0–1 ya captura el mood; la flecha es solo render. Menos complejidad. |
 | Auth: cliente Supabase **por-request con el JWT del usuario** (RLS activo) | service_role en todo el backend | service_role bypassa RLS; el JWT por-request mantiene el aislamiento a nivel DB |
 | Monorepo con Turborepo | Repos separados | Un solo dev, tipos compartidos, builds incrementales |
 | Express sobre Fastify / Hono | Fastify, Hono | Más conocido, más ejemplos, suficiente para MVP |
@@ -406,7 +445,9 @@ CREATE INDEX idx_track_tags_tag ON track_tags(tag);
 | Riesgo | Probabilidad | Impacto | Mitigación |
 |--------|-------------|---------|-----------|
 | Spotify audio-features **ya deprecado** para apps nuevas (nov-2024) | Hecho | Alto | **Resuelto en arquitectura:** BPM/clave vía GetSongBPM, energy/danceability y underground vía Claude. Spotify queda solo para identidad/catálogo. |
-| GetSongBPM sin match para tracks underground/edits | Alta | Medio | Fallback a inferencia de Claude (ya en el pipeline) |
+| GetSongBPM sin match para tracks underground/edits | Alta | Medio | Fallback a inferencia de Claude (ya en el pipeline); o subir el archivo para análisis DSP |
+| Análisis DSP lento/costoso en archivos grandes o muchos uploads | Media | Medio | Correr en worker/cola async (no bloquea el request); cap de tamaño 50 MB; evaluar WASM vs binario nativo; cachear resultado (no re-analizar) |
+| Storage de audio crece rápido (archivos pesados) | Media | Medio | Free tier de Supabase Storage acotado; el archivo es opcional; plan de migración a Pro o storage externo si escala |
 | Rate limits de Spotify / GetSongBPM en importaciones masivas | Alta | Medio | Queue + batch (lotes de 20) + delays configurados |
 | Rekordbox cambia formato XML | Baja | Alto | Tests de parseo con fixtures de versiones reales |
 | Costo de Claude API en producción | Media | Medio | Cache de tags generados, no regenerar si ya existen |

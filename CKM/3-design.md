@@ -232,44 +232,56 @@ shadow-card:        0 4px 24px rgba(0,0,0,0.4)
 │                    ││  [ 🔍 Buscar tracks...          ⌘K ]        │
 │  Filtros           ││                                              │
 │                    ││  Grid  ≡ Lista    1.247 tracks   ↕ BPM ▾   │
-│  BPM               ││  ─────────────────────────────────────────  │
-│  [====|====] 128   ││                                              │
-│  120       140     ││  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│  Clave (Camelot)   ││  ─────────────────────────────────────────  │
+│   ◜ rueda 12A..◝   ││                                              │
+│  [8A][9A][10A]     ││  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
 │                    ││  │ Track    │ │ Track    │ │ Track    │   │
-│  Clave (Camelot)   ││  │ Card     │ │ Card     │ │ Card     │   │
-│  [8A][9A][10A]     ││  └──────────┘ └──────────┘ └──────────┘   │
-│  [8B][9B]...       ││                                              │
-│                    ││  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
-│  Energía           ││  │ Track    │ │ Track    │ │ Track    │   │
-│  [====|====] 0.7   ││  │ Card     │ │ Card     │ │ Track    │   │
-│                    ││  └──────────┘ └──────────┘ └──────────┘   │
+│  BPM               ││  │ Card     │ │ Card     │ │ Card     │   │
+│  [====|====] 128   ││  └──────────┘ └──────────┘ └──────────┘   │
+│  120       140     ││                                              │
+│  Energía  [==|=] 7 ││  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│  Dance    [=|==] 6 ││  │ Track    │ │ Track    │ │ Track    │   │
+│  Emotion  [==|=]   ││  │ Card     │ │ Card     │ │ Track    │   │
+│  Rating   ★★★☆☆+   ││  └──────────┘ └──────────┘ └──────────┘   │
+│                    ││                                              │
 │  Momento           ││                                              │
 │  [peak] [calentar] ││                                              │
 │  [cierre] [after]  ││                                              │
-│                    ││                                              │
+│  Formato [mp3][wav]││                                              │
 │  ──────────────    ││                                              │
-│                    ││                                              │
 │  Playlists         ││                                              │
 │  + Set Viernes     ││                                              │
 │  + Warm Up Julio   ││                                              │
 └────────────────────┘└────────────────────────────────────────────┘
 ```
 
+**Controles del panel de filtros** (sidebar izquierdo, ajustables en vivo):
+- **Rueda Camelot**: selector circular de claves (las compatibles se resaltan al elegir una). También chips `[8A][9A]…` para selección rápida.
+- **BPM**: slider doble de rango.
+- **Energía / Danceability / Emotion**: sliders dobles en escala 1–10 (Emotion = `valence`).
+- **Rating**: selector de mínimo de estrellas (★★★☆☆+ = 3 o más).
+- **Momento**: chips de DJ tags.
+- **Formato**: chips (mp3/wav/…) + bitrate mínimo; solo afectan tracks con archivo.
+- Todos combinables; el estado de filtros persiste en la URL (compartible).
+
 ### 4.2 Biblioteca — Vista Lista
 
 Columnas visibles:
 ```
-│ ● │ Título + Artista          │ BPM │ Clave │ Energía │ Género    │ Tags       │ ··· │
-│───│───────────────────────────│─────│───────│─────────│───────────│────────────│─────│
-│ ● │ Kernkraft 400 · Z. Nation │ 138 │  8A   │ ████░░  │ techno    │ peak · exp │ ··· │
-│ ● │ Sandstorm · Darude        │ 136 │  3A   │ █████░  │ eurodance │ explotarla │ ··· │
+│ ● │ Título + Artista      │ BPM │ Clave │ Energía │ Dance │ Emo │ Rating │ Género    │ Tags       │ Fmt │ kbps │ ··· │
+│───│───────────────────────│─────│───────│─────────│───────│─────│────────│───────────│────────────│─────│──────│─────│
+│ ● │ Kernkraft · Z. Nation │ 138 │  8A   │ ████░░  │  8    │  ↑  │ ★★★★☆  │ techno    │ peak · exp │ mp3 │ 320  │ ··· │
+│ ● │ Sandstorm · Darude    │ 136 │  3A   │ █████░  │  7    │  ↓  │ ★★★☆☆  │ eurodance │ explotarla │ wav │ 1411 │ ··· │
 ```
 
 - El dot `●` tiene el color de energía del track
 - BPM y Clave en `font-mono`
-- Energía es una mini barra de 48px
+- Energía es una mini barra de 48px; Dance en escala 1–10
+- **Emo** (Emotion): flecha ↑/↓ derivada de `valence` (alto = ↑ cálido, bajo = ↓ frío)
+- **Rating**: estrellas 1–5, editables in-place (click en la estrella)
+- **Fmt / kbps**: format y bitrate; vacíos si el track no tiene archivo subido
 - Click en fila → abre detail panel (no modal, panel lateral derecho)
-- Columnas reordenables
+- Columnas reordenables y ocultables (el DJ elige qué ver)
 
 ### 4.3 Vista Grafo
 

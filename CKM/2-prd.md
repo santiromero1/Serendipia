@@ -8,7 +8,7 @@
 
 Serendipia es una plataforma web de curación musical inteligente para DJs. Permite enriquecer una biblioteca musical con metadatos automáticos generados por IA, visualizarla como una red de conexiones y consultarla en lenguaje natural para preparar sets.
 
-**Stack:** React + Tailwind · Node.js · Supabase · Spotify (identidad) · GetSongBPM (BPM/clave) · Claude API · D3.js
+**Stack:** React + Tailwind · Node.js · Supabase · Spotify (identidad) · GetSongBPM (BPM/clave) · Análisis de audio DSP (si hay archivo) · Claude API · D3.js
 
 ---
 
@@ -79,19 +79,23 @@ key_camelot     TEXT           -- e.g. "8A", "11B"
 key_standard    TEXT           -- e.g. "Am", "F#"
 energy          DECIMAL(4,3)   -- 0.000 a 1.000
 danceability    DECIMAL(4,3)
-valence         DECIMAL(4,3)   -- mood: sad → happy
+valence         DECIMAL(4,3)   -- mood: sad → happy. Se muestra en UI como "Emotion" (flecha ↑/↓)
 year            INTEGER
 genre           TEXT[]
 duration_ms     INTEGER
 spotify_id      TEXT
+rating          SMALLINT       -- valoración del DJ, 1 a 5 estrellas (NULL = sin valorar)
+format          TEXT           -- 'mp3' | 'wav' | 'aiff' | 'flac' ... (solo si hay archivo)
+bitrate         INTEGER        -- kbps, leído del header del archivo (solo si hay archivo)
+audio_file_url  TEXT           -- ref al archivo en Supabase Storage (NULL si no se subió)
 notes           TEXT           -- notas personales del DJ
 metadata_status TEXT           -- 'pending' | 'enriched' | 'ai_inferred' | 'manual'
-metadata_source TEXT           -- 'spotify' | 'getsongbpm' | 'ai' | 'manual' | 'rekordbox'
+metadata_source TEXT           -- 'spotify' | 'getsongbpm' | 'audio_analysis' | 'ai' | 'manual' | 'rekordbox'
 created_at      TIMESTAMPTZ
 updated_at      TIMESTAMPTZ
 ```
 
-> `metadata_status` describe el grado de completitud; `metadata_source` indica de dónde salió el dato DJ-crítico (BPM/clave). Esquema alineado con `5-api.md` §2 y la migración de `7-impl.md` §2.2.
+> `metadata_status` describe el grado de completitud; `metadata_source` indica de dónde salió el dato DJ-crítico (BPM/clave). Cuando el DJ sube el archivo, el análisis de audio (DSP) tiene prioridad sobre GetSongBPM/Claude para BPM/energy/danceability → `metadata_source: 'audio_analysis'`. `format`/`bitrate` solo existen si hay archivo. `valence` es el dato; la columna **Emotion** de la UI es su render como flecha (alto = ↑, bajo = ↓). Esquema alineado con `5-api.md` §2 y la migración de `7-impl.md` §2.2.
 
 ### Tabla `track_tags`
 ```sql
@@ -125,11 +129,13 @@ PRIMARY KEY (playlist_id, track_id)
 id              UUID PRIMARY KEY
 track_a_id      UUID REFERENCES tracks(id)   -- orden canónico: track_a_id < track_b_id
 track_b_id      UUID REFERENCES tracks(id)
-score           DECIMAL(4,3)   -- compatibilidad 0 a 1
-bpm_diff        INTEGER
-key_compatible  BOOLEAN
-energy_diff     DECIMAL(4,3)
-created_at      TIMESTAMPTZ
+score             DECIMAL(4,3) -- compatibilidad 0 a 1
+bpm_diff          INTEGER
+key_compatible    BOOLEAN
+energy_diff       DECIMAL(4,3)
+danceability_diff DECIMAL(4,3)
+valence_diff      DECIMAL(4,3)
+created_at        TIMESTAMPTZ
 ```
 
 > Para evitar conexiones duplicadas (a→b y b→a), se guarda una sola fila con `track_a_id < track_b_id` (orden canónico por UUID) + índice único `(track_a_id, track_b_id)`.
@@ -142,9 +148,9 @@ created_at      TIMESTAMPTZ
 
 ### F-01: Carga de Tracks
 
-**Descripción:** El usuario puede agregar tracks a su biblioteca ingresando nombre del artista y título de la canción.
+**Descripción:** El usuario puede agregar tracks a su biblioteca de dos maneras: ingresando artista + título (sin archivo), o subiendo el archivo de audio.
 
-**Flujo (pipeline híbrido):**
+**Flujo A — sin archivo (pipeline híbrido por APIs):**
 1. Usuario ingresa `artista` + `título` en el formulario
 2. Sistema busca en **Spotify** → identidad del track (título canónico, año, duración, género, portada, `spotify_id`)
 3. Sistema consulta **GetSongBPM** → BPM + clave musical
@@ -153,19 +159,32 @@ created_at      TIMESTAMPTZ
 6. Los **DJ tags se generan en background** (no bloquean la respuesta)
 7. Usuario puede editar manualmente cualquier campo
 
+**Flujo B — con archivo (análisis de audio DSP):**
+1. Usuario sube el archivo (`.mp3`/`.wav`/`.aiff`/`.flac`); se guarda en Supabase Storage
+2. Sistema lee del header → `format` y `bitrate`
+3. **Análisis DSP de la waveform** → BPM, energy, danceability medidos de la señal real (datos más precisos que las APIs); también clave si el algoritmo la estima
+4. **Spotify** se sigue consultando para identidad/catálogo (año, género, portada, `spotify_id`)
+5. Lo que el DSP no cubra (p. ej. `valence`/emotion, o género faltante) lo completa **Claude**
+6. Track queda en estado `enriched` con `metadata_source: 'audio_analysis'` para los campos medidos
+7. DJ tags en background; el usuario puede editar cualquier campo
+
+> El DSP **no reemplaza** al pipeline de APIs: lo complementa. Sin archivo (underground, bootlegs, edits), el camino A sigue siendo el único — esa es la ventaja diferencial frente a DJoid, que exige archivo siempre. Con archivo, ganamos la precisión de medir el audio.
+
 **Criterios de aceptación:**
-- [ ] Los metadatos (BPM, clave, energía) se resuelven en **≤ 4 segundos** y la respuesta los incluye
+- [ ] Los metadatos (BPM, clave, energía) se resuelven en **≤ 4 segundos** (camino A) y la respuesta los incluye
+- [ ] Con archivo subido, `format` y `bitrate` se leen correctamente del header
+- [ ] El análisis DSP completa BPM/energy/danceability y marca `metadata_source: 'audio_analysis'`; corre async si excede el presupuesto de latencia
 - [ ] Los DJ tags aparecen poco después (generación async), sin bloquear el guardado
 - [ ] Carga masiva vía CSV (columnas: título, artista) funciona para hasta 500 tracks
 - [ ] `metadata_status` y `metadata_source` reflejan correctamente el grado y la fuente
-- [ ] El usuario puede editar cualquier campo manualmente
+- [ ] El usuario puede editar cualquier campo manualmente, incluido el `rating` (1–5 estrellas)
 - [ ] Tracks duplicados muestran advertencia antes de guardar
 
-**Endpoint:**
+**Endpoints:**
 ```
-POST /api/tracks
-Body: { title: string, artist: string }
-Response: Track con metadatos enriquecidos (tags se completan async)
+POST /api/tracks            Body: { title, artist }            → camino A (APIs)
+POST /api/tracks/upload     multipart/form-data: file[, title, artist]  → camino B (DSP)
+Response: Track con metadatos enriquecidos (tags y DSP pesado se completan async)
 ```
 
 ---
@@ -176,9 +195,12 @@ Response: Track con metadatos enriquecidos (tags se completan async)
 
 | Fuente | Aporta | Notas |
 |--------|--------|-------|
+| **Análisis de audio (DSP)** *(solo si hay archivo)* | BPM, energy, danceability medidos de la waveform; `format` + `bitrate` del header | **Máxima precisión** y prioridad sobre el resto para esos campos. Requiere que el DJ haya subido el archivo. |
 | **Spotify** (search + track/artist) | Título canónico, año, duración, género, portada, `spotify_id` | Solo identidad/catálogo. **No** da audio-features. Género viene del *artist object* y suele venir incompleto. |
-| **GetSongBPM** | BPM + clave musical | Fuente dedicada de datos DJ. Buena cobertura para tracks comerciales/conocidos. |
-| **Claude** (fallback) | Lo que falte: energy, danceability, valence; y BPM/clave de tracks underground/edits sin match | Único camino para bootlegs sin presencia en APIs. Prompt estructurado, salida JSON validada. |
+| **GetSongBPM** | BPM + clave musical | Fuente dedicada de datos DJ. Buena cobertura para tracks comerciales/conocidos. Se usa cuando no hay archivo (o como respaldo de clave). |
+| **Claude** (fallback) | Lo que falte: energy, danceability, valence; y BPM/clave de tracks underground/edits sin match | Único camino para bootlegs sin presencia en APIs **ni archivo**. Prompt estructurado, salida JSON validada. |
+
+> **Orden de prioridad para campos DJ-críticos (BPM/energy/danceability):** análisis DSP (si hay archivo) → GetSongBPM (BPM/clave) → Claude (inferencia). El primero que aporte un dato confiable gana; `metadata_source` registra cuál fue.
 
 **Conversión de key a Camelot:**
 ```javascript
@@ -235,14 +257,20 @@ Respondé SOLO con un array JSON. Ejemplo: ["peak", "explotarla"]
 
 **Descripción:** Vista principal de la biblioteca con filtros y búsqueda.
 
-**Filtros disponibles:**
+**Filtros disponibles** (panel ajustable en el sidebar izquierdo):
+- Clave Camelot (selector múltiple con **rueda Camelot** visual)
 - BPM (rango: slider doble)
-- Clave Camelot (selector múltiple con rueda visual)
-- Energía (rango: slider doble)
+- Energía (rango: slider doble, 1–10)
+- Danceability (rango: slider doble, 1–10)
+- Emotion / valence (rango: slider doble)
+- Rating (mínimo de estrellas: 1–5)
 - Género (selector múltiple)
 - Etiquetas de DJ (selector múltiple)
 - Año (rango)
+- Formato (mp3 / wav / ...) y bitrate mínimo *(solo aplican a tracks con archivo)*
 - Estado de metadatos (enriquecido / inferido por IA / manual)
+
+> Los rangos de energía/danceability/emotion se muestran al DJ en escala 1–10 (como en DJoid) pero se guardan internamente como `DECIMAL(4,3)` 0.0–1.0.
 
 **Vistas:**
 - Grid de cards (default)
@@ -250,15 +278,18 @@ Respondé SOLO con un array JSON. Ejemplo: ["peak", "explotarla"]
 
 **Card de track muestra:**
 - Título + Artista
-- BPM · Clave Camelot · Energía (barra visual)
-- Género + etiquetas DJ como chips
-- Badge de fuente de metadatos
+- BPM · Clave Camelot · Energía (barra visual) · Danceability · Emotion (flecha ↑/↓)
+- Rating (estrellas, editable in-place)
+- Género (genre prediction) + etiquetas DJ como chips
+- Badge de fuente de metadatos (incluye `audio_analysis` cuando vino del DSP)
+- Formato + bitrate (si el track tiene archivo)
 - Acciones: editar, agregar a playlist, ver conexiones
 
 **Criterios de aceptación:**
 - [ ] Búsqueda por texto en tiempo real (título o artista)
 - [ ] Filtros combinables entre sí
-- [ ] Ordenamiento por BPM, energía, año, título
+- [ ] El DJ puede asignar/editar el rating (1–5 estrellas) desde la lista o la card
+- [ ] Ordenamiento por BPM, energía, danceability, rating, año, título
 - [ ] Performance: renderiza 1000+ tracks sin lag perceptible
 - [ ] Estado de filtros persiste en URL (compartible)
 
@@ -319,15 +350,24 @@ Respondé SOLO con un array JSON. Ejemplo: ["peak", "explotarla"]
 ```javascript
 // Score de compatibilidad entre dos tracks (0 a 1)
 function compatibilityScore(trackA, trackB) {
-  const bpmScore = 1 - Math.min(Math.abs(trackA.bpm - trackB.bpm), 8) / 8
-  const keyScore = camelotCompatibilityScore(trackA.key_camelot, trackB.key_camelot) // 1.0 / 0.8 / 0
+  const bpmScore   = 1 - Math.min(Math.abs(trackA.bpm - trackB.bpm), 8) / 8
+  const keyScore   = camelotCompatibilityScore(trackA.key_camelot, trackB.key_camelot) // 1.0 / 0.8 / 0
   const energyScore = 1 - Math.abs(trackA.energy - trackB.energy)
-  
-  return (bpmScore * 0.4) + (keyScore * 0.4) + (energyScore * 0.2)
+  const danceScore  = 1 - Math.abs(trackA.danceability - trackB.danceability)
+  const emotionScore = 1 - Math.abs(trackA.valence - trackB.valence) // "Emotion" = valence
+
+  // BPM y clave siguen dominando (compatibilidad de mezcla); energy/dance/emotion afinan el matiz
+  return (bpmScore * 0.35)
+       + (keyScore * 0.35)
+       + (energyScore * 0.15)
+       + (danceScore * 0.075)
+       + (emotionScore * 0.075)
 }
 
 // Se crea conexión si score > 0.65
 ```
+
+> Pesos: BPM y clave concentran el 70% porque son los que determinan si dos tracks se pueden mezclar de hecho. Energy aporta 15% y danceability/emotion 7.5% cada uno — afinan la *vibra* de la conexión sin desplazar la compatibilidad técnica. Si alguno de `danceability`/`valence` es `null` (track sin esos datos), su término se omite y los pesos se renormalizan.
 
 **Compatibilidad Camelot:**
 - Misma clave: score 1.0

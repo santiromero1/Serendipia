@@ -55,7 +55,7 @@ Charset:         UTF-8
 // packages/types/src/track.ts
 
 export type MetadataStatus = 'pending' | 'enriched' | 'ai_inferred' | 'manual'
-export type MetadataSource = 'spotify' | 'getsongbpm' | 'ai' | 'manual' | 'rekordbox'
+export type MetadataSource = 'spotify' | 'getsongbpm' | 'audio_analysis' | 'ai' | 'manual' | 'rekordbox'
 export type TagType = 'moment' | 'genre' | 'custom'
 export type TagSource = 'ai' | 'user'
 
@@ -81,11 +81,15 @@ export interface Track {
   key_standard: string | null      // "Am", "F#", etc.
   energy: number | null            // 0.0 - 1.0
   danceability: number | null      // 0.0 - 1.0
-  valence: number | null           // 0.0 - 1.0
+  valence: number | null           // 0.0 - 1.0 — se muestra en UI como "Emotion" (flecha ↑/↓)
   year: number | null
   genre: string[]
   duration_ms: number | null
   spotify_id: string | null
+  rating: number | null            // 1 - 5 estrellas (DJ), null = sin valorar
+  format: string | null            // 'mp3' | 'wav' | 'aiff' | 'flac' — solo si hay archivo
+  bitrate: number | null           // kbps — solo si hay archivo
+  audio_file_url: string | null    // ref en Supabase Storage, null si no se subió archivo
   metadata_status: MetadataStatus
   metadata_source: MetadataSource
   notes: string | null
@@ -161,12 +165,19 @@ bpm_max       number    BPM máximo (inclusive)
 key_camelot   string[]  Claves Camelot. Ej: ?key_camelot=8A&key_camelot=9A
 energy_min    number    0.0 - 1.0
 energy_max    number    0.0 - 1.0
+dance_min     number    Danceability mínima 0.0 - 1.0
+dance_max     number    Danceability máxima 0.0 - 1.0
+valence_min   number    Emotion/valence mínima 0.0 - 1.0
+valence_max   number    Emotion/valence máxima 0.0 - 1.0
+rating_min    number    Rating mínimo 1 - 5 (estrellas)
 genre         string[]  Géneros. Ej: ?genre=techno&genre=house
 tags          string[]  Tags DJ. Ej: ?tags=peak&tags=explotarla
+format        string[]  Formatos. Ej: ?format=mp3&format=wav
+bitrate_min   number    Bitrate mínimo en kbps
 year_min      number    Año mínimo
 year_max      number    Año máximo
 status        string    MetadataStatus: pending | enriched | ai_inferred | manual
-sort_by       string    bpm | energy | year | title | created_at (default: created_at)
+sort_by       string    bpm | energy | danceability | rating | year | title | created_at (default: created_at)
 sort_order    string    asc | desc (default: desc)
 limit         number    Default: 50. Max: 200
 offset        number    Default: 0
@@ -190,8 +201,12 @@ offset        number    Default: 0
       "genre": ["techno", "dance"],
       "duration_ms": 245000,
       "spotify_id": "spotify_id_here",
+      "rating": 4,
+      "format": "mp3",
+      "bitrate": 320,
+      "audio_file_url": "https://...supabase.co/storage/v1/.../kernkraft.mp3",
       "metadata_status": "enriched",
-      "metadata_source": "spotify",
+      "metadata_source": "audio_analysis",
       "notes": null,
       "tags": [
         { "id": "uuid", "tag": "peak", "tag_type": "moment", "source": "ai" },
@@ -253,6 +268,39 @@ Crea un track y dispara enriquecimiento automático de metadatos.
 
 ---
 
+### `POST /tracks/upload`
+
+Crea un track a partir de un **archivo de audio**. Activa el análisis de audio (DSP) para medir BPM/energy/danceability de la waveform.
+
+**Request:** `multipart/form-data`
+```
+file      File      requerido — .mp3 | .wav | .aiff | .flac (máx. 50 MB)
+title     string    opcional — si no viene, se infiere del tag ID3 / nombre de archivo
+artist    string    opcional — idem
+```
+
+**Flujo interno (camino B — DSP):**
+1. Subir el archivo a Supabase Storage → `audio_file_url`
+2. Leer header → `format`, `bitrate`, y tags ID3 (title/artist si no se pasaron)
+3. Insertar track con `metadata_status: 'pending'`
+4. **Análisis DSP de la waveform** → BPM, energy, danceability (y clave si se estima) → `metadata_source: 'audio_analysis'`
+5. **Spotify** → identidad/catálogo (año, género, portada, `spotify_id`)
+6. Lo que el DSP no cubra (valence, género faltante) → **Claude**
+7. Retornar el track; si el DSP excede el presupuesto de latencia corre async y el cliente refetchea
+8. DJ tags en background (igual que `POST /tracks`)
+
+**Response 201:** `{ "data": { /* Track completo, con format/bitrate/audio_file_url */ } }`
+
+**Errores:**
+```
+400 VALIDATION_ERROR     → archivo ausente o campos inválidos
+413 FILE_TOO_LARGE       → supera 50 MB
+415 UNSUPPORTED_FORMAT   → formato de audio no soportado
+409 TRACK_DUPLICATE      → ya existe title+artist para este usuario
+```
+
+---
+
 ### `GET /tracks/:id`
 
 Retorna un track completo por ID.
@@ -280,13 +328,16 @@ Actualiza campos de un track. Permite edición manual de metadatos.
   "key_camelot": "8A",
   "key_standard": "Am",
   "energy": 0.91,
+  "danceability": 0.87,
+  "valence": 0.62,
+  "rating": 4,
   "year": 1999,
   "genre": ["techno"],
   "notes": "string"
 }
 ```
 
-Si se actualiza `title` o `artist` → el campo `metadata_source` pasa a `manual`.
+Si se actualiza `title` o `artist` → el campo `metadata_source` pasa a `manual`. El `rating` es siempre editable por el DJ y no altera `metadata_source` (es dato propio, no de enriquecimiento).
 
 **Response 200:** Track completo actualizado
 
