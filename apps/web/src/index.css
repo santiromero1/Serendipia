@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────────────────
+   Design tokens — fiel a CKM/3-design.md §2
+   ─────────────────────────────────────────────────────────── */
+@theme {
+  /* Fondos */
+  --color-background: #0a0a0f;
+  --color-surface: #13131a;
+  --color-surface-raised: #1a1a24;
+  --color-border: #1e1e2e;
+  --color-border-strong: #2a2a3c;
+
+  /* Acentos */
+  --color-primary: #7c3aed;
+  --color-primary-light: #a78bfa;
+  --color-cyan: #06b6d4;
+  --color-amber: #f59e0b;
+  --color-green: #10b981;
+
+  /* Texto */
+  --color-fg: #f8f8ff;
+  --color-fg-soft: #94a3b8;
+  --color-fg-faint: #475569;
+
+  /* Semánticos */
+  --color-error: #f87171;
+  --color-warning: #fbbf24;
+  --color-success: #34d399;
+  --color-info: #38bdf8;
+
+  /* Energía (nodos del grafo y barras) */
+  --color-energy-low: #3b82f6;
+  --color-energy-mid: #a78bfa;
+  --color-energy-high: #f59e0b;
+  --color-energy-peak: #ef4444;
+
+  /* Tipografía */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* Sombras */
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-glow-purple: 0 0 20px #7c3aed33;
+  --shadow-glow-cyan: 0 0 20px #06b6d433;
+}
+
+/* ───────────────────────────────────────────────────────────
+   Base
+   ─────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-background);
+    color: var(--color-fg-soft);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4 {
+    color: var(--color-fg);
+    font-weight: 600;
+  }
+
+  ::selection {
+    background: #7c3aed55;
+    color: #fff;
+  }
+
+  /* Scrollbars discretas en dark mode */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 9999px;
+    border: 2px solid var(--color-background);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a52;
+  }
+
+  /* Focus visible global (CKM/3-design.md §9) */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────
+   Animaciones (CKM/3-design.md §5)
+   ─────────────────────────────────────────────────────────── */
+@keyframes slide-in-right {
+  from { transform: translateX(16px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scale-in {
+  from { transform: scale(0.98); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  70% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-slide-in-right { animation: slide-in-right 200ms ease-out; }
+.animate-fade-in { animation: fade-in 150ms ease-out; }
+.animate-scale-in { animation: scale-in 150ms ease-out; }
+.animate-pop { animation: pop 200ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────
+   Dual range slider (BPM / energía)
+   ─────────────────────────────────────────────────────────── */
+.dual-range input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+}
+.dual-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 0 0 4px #7c3aed22;
+  cursor: pointer;
+}
+.dual-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 0 0 4px #7c3aed22;
+  cursor: pointer;
+}
+.dual-range input[type="range"]::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.dual-range input[type="range"]::-moz-range-track {
+  background: transparent;
+}
