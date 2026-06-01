@@ -3,7 +3,7 @@
 
 export type MetadataStatus = 'pending' | 'enriched' | 'ai_inferred' | 'manual'
 
-export type MetadataSource = 'spotify' | 'getsongbpm' | 'ai' | 'manual' | 'rekordbox'
+export type MetadataSource = 'spotify' | 'getsongbpm' | 'audio_analysis' | 'ai' | 'manual' | 'rekordbox'
 
 export type TagType = 'moment' | 'genre' | 'custom'
 
@@ -42,6 +42,11 @@ export interface Track {
   genre: string[]
   duration_ms: number | null
   spotify_id: string | null
+  rating: number | null            // 1-5 estrellas (DJ), null = sin valorar
+  format: string | null            // 'mp3' | 'wav' | 'aiff' | 'flac' — solo si hay archivo
+  bitrate: number | null           // kbps — solo si hay archivo
+  audio_file_url: string | null    // blob URL en frontend; Supabase Storage en backend
+  cover_url: string | null         // blob URL del cover embebido, o URL de Spotify
   metadata_status: MetadataStatus
   metadata_source: MetadataSource
   notes: string | null

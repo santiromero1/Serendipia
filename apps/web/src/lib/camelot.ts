@@ -14,6 +14,23 @@ export const CAMELOT_TO_STANDARD: Record<string, string> = {
   '7B': 'F', '8B': 'C', '9B': 'G', '10B': 'D', '11B': 'A', '12B': 'E',
 }
 
+// Tono (hue) por número de la rueda 1..12 — aprox. rueda Mixed In Key.
+const CAMELOT_HUE: Record<number, number> = {
+  1: 158, 2: 130, 3: 95, 4: 60, 5: 35, 6: 8,
+  7: 340, 8: 310, 9: 280, 10: 250, 11: 215, 12: 185,
+}
+
+/** Color de una clave Camelot ("8A", "11B"…) para la rueda y el grafo. */
+export function camelotColor(key: string | null): string {
+  if (!key) return '#6b7280'
+  const n = parseInt(key, 10)
+  const letter = key.slice(String(n).length) // 'A' | 'B'
+  const h = CAMELOT_HUE[n] ?? 220
+  const l = letter === 'B' ? 62 : 70
+  const s = letter === 'B' ? 55 : 62
+  return `hsl(${h}, ${s}%, ${l}%)`
+}
+
 /**
  * Compatibilidad de clave graduada.
  * Misma o adyacente ±1 → 1.0 · relativa mayor/menor (mismo nº, distinto modo) → 0.8 · resto → 0

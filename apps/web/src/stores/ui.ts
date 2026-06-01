@@ -3,6 +3,24 @@ import { create } from 'zustand'
 export type LibraryView = 'grid' | 'list'
 export type PanelType = 'none' | 'add' | 'detail'
 
+export const MIN_SIDEBAR_WIDTH = 200
+export const MAX_SIDEBAR_WIDTH = 420
+export const DEFAULT_SIDEBAR_WIDTH = 240
+
+const SIDEBAR_WIDTH_KEY = 'serendipia.sidebarWidth'
+
+function loadSidebarWidth(): number {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_WIDTH_KEY)
+    if (!raw) return DEFAULT_SIDEBAR_WIDTH
+    const n = Number(raw)
+    if (Number.isFinite(n) && n >= MIN_SIDEBAR_WIDTH && n <= MAX_SIDEBAR_WIDTH) return n
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_SIDEBAR_WIDTH
+}
+
 interface UIState {
   libraryView: LibraryView
   panel: { type: PanelType; trackId?: string }
@@ -10,6 +28,7 @@ interface UIState {
   newPlaylistOpen: boolean
   searchOpen: boolean
   sidebarCollapsed: boolean
+  sidebarWidth: number
 
   setLibraryView: (v: LibraryView) => void
   openAddTrack: () => void
@@ -19,6 +38,7 @@ interface UIState {
   setNewPlaylistOpen: (v: boolean) => void
   setSearchOpen: (v: boolean) => void
   toggleSidebar: () => void
+  setSidebarWidth: (width: number) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -28,6 +48,7 @@ export const useUIStore = create<UIState>((set) => ({
   newPlaylistOpen: false,
   searchOpen: false,
   sidebarCollapsed: false,
+  sidebarWidth: loadSidebarWidth(),
 
   setLibraryView: (v) => set({ libraryView: v }),
   openAddTrack: () => set({ panel: { type: 'add' } }),
@@ -37,4 +58,13 @@ export const useUIStore = create<UIState>((set) => ({
   setNewPlaylistOpen: (v) => set({ newPlaylistOpen: v }),
   setSearchOpen: (v) => set({ searchOpen: v }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  setSidebarWidth: (width) => {
+    const sidebarWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width))
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth))
+    } catch {
+      /* ignore */
+    }
+    set({ sidebarWidth })
+  },
 }))

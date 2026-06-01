@@ -17,6 +17,22 @@ export function energyLabel(energy: number | null): string {
   return 'Peak'
 }
 
+/** Emoción derivada de valence (0..1): ↓ oscura · → neutra · ↑ luminosa. */
+export function emotion(valence: number | null): { arrow: '↑' | '→' | '↓'; label: string; color: string } {
+  if (valence == null) return { arrow: '→', label: 'Sin dato', color: '#475569' }
+  if (valence < 0.4) return { arrow: '↓', label: 'Oscura', color: '#3b82f6' }
+  if (valence > 0.6) return { arrow: '↑', label: 'Luminosa', color: '#f59e0b' }
+  return { arrow: '→', label: 'Neutra', color: '#a78bfa' }
+}
+
+/** Fecha de subida legible en es-AR (ej. "20 may 2026"). */
+export function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export function formatDuration(ms: number | null): string {
   if (ms == null) return '—'
   const totalSec = Math.round(ms / 1000)

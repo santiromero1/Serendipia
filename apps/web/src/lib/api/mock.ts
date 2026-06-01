@@ -11,13 +11,71 @@ import type {
   ImportJobStatus,
   ApiList,
 } from '@serendipia/types'
-import type { ApiClient, MetadataPreview } from './client'
+import type { ApiClient, MetadataPreview, UploadPhase } from './client'
 import { buildMockTracks, buildMockPlaylists } from '@/lib/mock/data'
 import { CAMELOT_KEYS, CAMELOT_TO_STANDARD } from '@/lib/camelot'
+import { analyzeAudioFile } from '@/lib/audio/analyze'
+import { generatePeaks } from '@/lib/audio/waveform'
+import {
+  dbListTracks, dbPutTrack, dbDeleteTrack, dbPutFile, dbGetFile, dbGetAllFiles, dbHasUploads,
+} from '@/lib/db'
 
 // ── Store en memoria ──────────────────────────────────────────
 const tracks: Track[] = buildMockTracks()
 const playlists: Playlist[] = buildMockPlaylists()
+// Cache de peaks de waveform en memoria (track_id → peaks). Se llena desde IDB.
+const peaksCache = new Map<string, number[]>()
+// Blob URLs creadas para reproducir/portada — revocadas en delete.
+const blobUrls = new Map<string, string[]>()
+
+// AudioContext perezoso (solo se crea al subir el primer archivo).
+let audioCtx: AudioContext | null = null
+function getAudioContext(): AudioContext {
+  if (!audioCtx) {
+    const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    audioCtx = new Ctor()
+  }
+  return audioCtx
+}
+
+/**
+ * Hidrata el store en memoria con lo que el usuario ya subió (persistido en IDB).
+ * Los tracks subidos van al frente para que se vean primero. Idempotente.
+ */
+let hydrated: Promise<void> | null = null
+function ensureHydrated(): Promise<void> {
+  if (!hydrated) {
+    hydrated = (async () => {
+      try {
+        const [persisted, files] = await Promise.all([dbListTracks(), dbGetAllFiles()])
+        for (const f of files) {
+          if (f.peaks) peaksCache.set(f.track_id, f.peaks)
+        }
+        const known = new Set(tracks.map((t) => t.id))
+        // Reconstruimos blob URLs para audio + portada de cada archivo persistido.
+        const fileById = new Map(files.map((f) => [f.track_id, f]))
+        const restored: Track[] = []
+        for (const t of persisted) {
+          if (known.has(t.id)) continue
+          const file = fileById.get(t.id)
+          const urls: string[] = []
+          let audio_file_url = t.audio_file_url
+          let cover_url = t.cover_url
+          if (file?.audio_blob) { audio_file_url = URL.createObjectURL(file.audio_blob); urls.push(audio_file_url) }
+          if (file?.cover_blob) { cover_url = URL.createObjectURL(file.cover_blob); urls.push(cover_url) }
+          if (urls.length) blobUrls.set(t.id, urls)
+          restored.push({ ...t, audio_file_url, cover_url })
+        }
+        // Ordenar por created_at desc y anteponer
+        restored.sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+        tracks.unshift(...restored)
+      } catch (e) {
+        console.warn('No se pudo hidratar desde IndexedDB:', e)
+      }
+    })()
+  }
+  return hydrated
+}
 const playlistTracks = new Map<string, string[]>([
   ['pl-0001', tracks.filter((t) => t.tags.some((x) => ['peak', 'explotarla'].includes(x.tag))).slice(0, 6).map((t) => t.id)],
   ['pl-0002', tracks.filter((t) => t.tags.some((x) => ['apertura', 'calentar'].includes(x.tag))).slice(0, 5).map((t) => t.id)],
@@ -57,6 +115,10 @@ function applyFilters(list: Track[], f: TrackFilters): Track[] {
   if (f.bpm_max != null) out = out.filter((t) => t.bpm != null && t.bpm <= f.bpm_max!)
   if (f.energy_min != null) out = out.filter((t) => t.energy != null && t.energy >= f.energy_min!)
   if (f.energy_max != null) out = out.filter((t) => t.energy != null && t.energy <= f.energy_max!)
+  if (f.danceability_min != null) out = out.filter((t) => t.danceability != null && t.danceability >= f.danceability_min!)
+  if (f.danceability_max != null) out = out.filter((t) => t.danceability != null && t.danceability <= f.danceability_max!)
+  if (f.valence_min != null) out = out.filter((t) => t.valence != null && t.valence >= f.valence_min!)
+  if (f.valence_max != null) out = out.filter((t) => t.valence != null && t.valence <= f.valence_max!)
   if (f.year_min != null) out = out.filter((t) => t.year != null && t.year >= f.year_min!)
   if (f.year_max != null) out = out.filter((t) => t.year != null && t.year <= f.year_max!)
   if (f.status) out = out.filter((t) => t.metadata_status === f.status)
@@ -117,6 +179,7 @@ function fakeEnrich(title: string, artist: string): MetadataPreview {
 // ── Implementación ────────────────────────────────────────────
 export const mockClient: ApiClient = {
   async listTracks(filters) {
+    await ensureHydrated()
     await delay()
     const filtered = applyFilters(tracks, filters)
     const limit = filters.limit ?? 200
@@ -130,6 +193,7 @@ export const mockClient: ApiClient = {
   },
 
   async getTrack(id) {
+    await ensureHydrated()
     await delay(120)
     const t = tracks.find((x) => x.id === id)
     if (!t) throw new Error('TRACK_NOT_FOUND')
@@ -156,12 +220,14 @@ export const mockClient: ApiClient = {
       energy: meta.energy, danceability: meta.danceability, valence: 0.5,
       year: meta.year, genre: meta.genre, duration_ms: 200000,
       spotify_id: meta.metadata_source === 'ai' ? null : `spotify_${idCounter}`,
+      rating: null, format: null, bitrate: null, audio_file_url: null, cover_url: null,
       metadata_status: meta.metadata_status, metadata_source: meta.metadata_source,
       notes: input.notes ?? null,
       tags: meta.tags.map((tag) => ({ id: newId('tag'), tag, tag_type: 'moment', source: 'ai' })),
       created_at: nowIso(), updated_at: nowIso(),
     }
     tracks.unshift(track)
+    void dbPutTrack(track)
     return track
   },
 
@@ -175,6 +241,7 @@ export const mockClient: ApiClient = {
       t.metadata_source = 'manual'
     }
     t.updated_at = nowIso()
+    void dbPutTrack(t)
     return t
   },
 
@@ -182,6 +249,11 @@ export const mockClient: ApiClient = {
     await delay(150)
     const i = tracks.findIndex((x) => x.id === id)
     if (i >= 0) tracks.splice(i, 1)
+    // Liberar blob URLs y borrar de IDB (no-op si era un track mock).
+    blobUrls.get(id)?.forEach((u) => URL.revokeObjectURL(u))
+    blobUrls.delete(id)
+    peaksCache.delete(id)
+    void dbDeleteTrack(id)
     playlistTracks.forEach((ids, pid) => {
       const next = ids.filter((x) => x !== id)
       playlistTracks.set(pid, next)
@@ -217,16 +289,20 @@ export const mockClient: ApiClient = {
     // Agrega tracks nuevos generados al store (aparecen al terminar el job)
     for (let i = 0; i < count; i++) {
       const meta = fakeEnrich(`Imported ${i}-${job.job_id}`, 'Rekordbox')
-      tracks.push({
+      const t: Track = {
         id: newId('trk'), user_id: 'mock-user',
         title: `Track Importado ${i + 1}`, artist: `Artista ${1 + (i % 12)}`,
         bpm: meta.bpm, key_camelot: meta.key_camelot, key_standard: meta.key_standard,
         energy: meta.energy, danceability: meta.danceability, valence: 0.5,
         year: 1995 + (i % 30), genre: meta.genre, duration_ms: 210000,
-        spotify_id: null, metadata_status: meta.metadata_status, metadata_source: 'rekordbox',
+        spotify_id: null, rating: null, format: null, bitrate: null,
+        audio_file_url: null, cover_url: null,
+        metadata_status: meta.metadata_status, metadata_source: 'rekordbox',
         notes: null, tags: meta.tags.slice(0, 2).map((tag) => ({ id: newId('tag'), tag, tag_type: 'moment', source: 'ai' })),
         created_at: nowIso(), updated_at: nowIso(),
-      })
+      }
+      tracks.push(t)
+      void dbPutTrack(t)
     }
     return stripStart(job)
   },
@@ -334,6 +410,7 @@ export const mockClient: ApiClient = {
   },
 
   async libraryStats() {
+    await ensureHydrated()
     await delay(80)
     return {
       total: tracks.length,
@@ -341,6 +418,86 @@ export const mockClient: ApiClient = {
       pending: tracks.filter((t) => t.metadata_status === 'pending').length,
       playlists: playlists.length,
     }
+  },
+
+  // ── Upload de archivos de audio (DSP real en el browser) ──────
+  async uploadAudioFile(file, onProgress?: (phase: UploadPhase) => void) {
+    await ensureHydrated()
+    const emit = (p: UploadPhase) => onProgress?.(p)
+
+    emit('reading')
+    emit('parsing')
+    // ID3 + decode + (BPM/clave por DSP si faltan en el tag)
+    emit('decoding')
+    const analyzed = await analyzeAudioFile(file, getAudioContext())
+
+    // Detección de duplicado por título + artista
+    const dup = tracks.some(
+      (t) => t.title.toLowerCase() === analyzed.title.toLowerCase() &&
+        t.artist.toLowerCase() === analyzed.artist.toLowerCase(),
+    )
+    if (dup) throw new Error('TRACK_DUPLICATE')
+
+    emit('analyzing')
+    // Enriquecimiento "IA" simulado para energy/danceability/valence/tags
+    // (lo que un modelo daría sin necesidad de tag). El BPM/clave reales mandan.
+    const ai = fakeEnrich(analyzed.title, analyzed.artist)
+
+    emit('waveform')
+    const peaks = generatePeaks(analyzed.audio_buffer)
+
+    const id = newId('trk')
+    const urls: string[] = []
+    const audio_blob = file
+    const audio_file_url = URL.createObjectURL(audio_blob)
+    urls.push(audio_file_url)
+    let cover_url: string | null = null
+    if (analyzed.cover_blob) {
+      cover_url = URL.createObjectURL(analyzed.cover_blob)
+      urls.push(cover_url)
+    }
+    blobUrls.set(id, urls)
+
+    const track: Track = {
+      id, user_id: 'mock-user',
+      title: analyzed.title, artist: analyzed.artist,
+      bpm: analyzed.bpm, key_camelot: analyzed.key_camelot, key_standard: analyzed.key_standard,
+      energy: ai.energy, danceability: ai.danceability, valence: (ai.energy ?? 0.5) * 0.6 + 0.2,
+      year: analyzed.year ?? ai.year, genre: analyzed.genre.length ? analyzed.genre : ai.genre,
+      duration_ms: analyzed.duration_ms,
+      spotify_id: null, rating: null,
+      format: analyzed.format, bitrate: analyzed.bitrate,
+      audio_file_url, cover_url,
+      metadata_status: analyzed.bpm ? 'enriched' : 'ai_inferred',
+      metadata_source: analyzed.metadata_source === 'audio_analysis' ? 'audio_analysis' : analyzed.bpm ? 'rekordbox' : 'ai',
+      notes: null,
+      tags: ai.tags.map((tag) => ({ id: newId('tag'), tag, tag_type: 'moment', source: 'ai' })),
+      created_at: nowIso(), updated_at: nowIso(),
+    }
+
+    emit('saving')
+    peaksCache.set(id, peaks)
+    tracks.unshift(track)
+    // Persistimos: metadata sin blobs + blobs/peaks por separado.
+    await dbPutTrack({ ...track, audio_file_url: null, cover_url: null })
+    await dbPutFile(id, audio_blob, analyzed.cover_blob, peaks)
+
+    emit('done')
+    return track
+  },
+
+  async getTrackPeaks(trackId) {
+    if (peaksCache.has(trackId)) return peaksCache.get(trackId)!
+    const file = await dbGetFile(trackId)
+    if (file?.peaks) {
+      peaksCache.set(trackId, file.peaks)
+      return file.peaks
+    }
+    return null
+  },
+
+  async hasUploads() {
+    return dbHasUploads()
   },
 }
 

@@ -24,6 +24,11 @@ export interface TrackFilters {
   key_camelot?: string[]
   energy_min?: number
   energy_max?: number
+  danceability_min?: number
+  danceability_max?: number
+  /** Emoción derivada de valence: -1 (oscura) … +1 (luminosa). */
+  valence_min?: number
+  valence_max?: number
   genre?: string[]
   tags?: string[]
   year_min?: number
@@ -48,8 +53,11 @@ export type UpdateTrackInput = Partial<{
   key_camelot: string | null
   key_standard: string | null
   energy: number | null
+  danceability: number | null
+  valence: number | null
   year: number | null
   genre: string[]
+  rating: number | null
   notes: string | null
 }>
 

@@ -11,6 +11,10 @@ interface FilterState {
   keys: string[]
   energyMin: number
   energyMax: number
+  danceMin: number
+  danceMax: number
+  valenceMin: number
+  valenceMax: number
   genres: string[]
   tags: string[]
   sortBy: SortBy
@@ -19,6 +23,8 @@ interface FilterState {
   setSearch: (v: string) => void
   setBpm: (min: number, max: number) => void
   setEnergy: (min: number, max: number) => void
+  setDance: (min: number, max: number) => void
+  setValence: (min: number, max: number) => void
   toggleKey: (k: string) => void
   toggleGenre: (g: string) => void
   toggleTag: (t: string) => void
@@ -37,6 +43,10 @@ const initial = {
   keys: [] as string[],
   energyMin: 0,
   energyMax: 1,
+  danceMin: 0,
+  danceMax: 1,
+  valenceMin: 0,
+  valenceMax: 1,
   genres: [] as string[],
   tags: [] as string[],
   sortBy: 'created_at' as SortBy,
@@ -52,6 +62,8 @@ export const useFilterStore = create<FilterState>((set, get) => ({
   setSearch: (v) => set({ search: v }),
   setBpm: (min, max) => set({ bpmMin: min, bpmMax: max }),
   setEnergy: (min, max) => set({ energyMin: min, energyMax: max }),
+  setDance: (min, max) => set({ danceMin: min, danceMax: max }),
+  setValence: (min, max) => set({ valenceMin: min, valenceMax: max }),
   toggleKey: (k) => set((s) => ({ keys: toggle(s.keys, k) })),
   toggleGenre: (g) => set((s) => ({ genres: toggle(s.genres, g) })),
   toggleTag: (t) => set((s) => ({ tags: toggle(s.tags, t) })),
@@ -66,6 +78,10 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     if (s.bpmMax < BPM_RANGE.max) f.bpm_max = s.bpmMax
     if (s.energyMin > 0) f.energy_min = s.energyMin
     if (s.energyMax < 1) f.energy_max = s.energyMax
+    if (s.danceMin > 0) f.danceability_min = s.danceMin
+    if (s.danceMax < 1) f.danceability_max = s.danceMax
+    if (s.valenceMin > 0) f.valence_min = s.valenceMin
+    if (s.valenceMax < 1) f.valence_max = s.valenceMax
     if (s.keys.length) f.key_camelot = s.keys
     if (s.genres.length) f.genre = s.genres
     if (s.tags.length) f.tags = s.tags
@@ -78,6 +94,8 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     if (s.search.trim()) n++
     if (s.bpmMin > BPM_RANGE.min || s.bpmMax < BPM_RANGE.max) n++
     if (s.energyMin > 0 || s.energyMax < 1) n++
+    if (s.danceMin > 0 || s.danceMax < 1) n++
+    if (s.valenceMin > 0 || s.valenceMax < 1) n++
     n += s.keys.length + s.genres.length + s.tags.length
     return n
   },

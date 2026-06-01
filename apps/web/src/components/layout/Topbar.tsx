@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Plus, Search, Disc3 } from 'lucide-react'
+import { Plus, Search, Disc3, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Kbd } from '@/components/ui/Kbd'
 import { cx } from '@/lib/format'
@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/ui'
 export function Topbar() {
   const openAdd = useUIStore((s) => s.openAddTrack)
   const openSearch = useUIStore((s) => s.setSearchOpen)
+  const openImport = useUIStore((s) => s.setImportOpen)
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-background/85 backdrop-blur-md px-5">
@@ -32,6 +33,9 @@ export function Topbar() {
           <span className="flex-1 text-left">Buscar tracks…</span>
           <Kbd>⌘K</Kbd>
         </button>
+        <Button variant="secondary" onClick={() => openImport(true)} size="md" aria-label="Importar archivos">
+          <Upload size={15} /> Importar
+        </Button>
         <Button onClick={openAdd} size="md">
           <Plus size={16} /> Track
         </Button>

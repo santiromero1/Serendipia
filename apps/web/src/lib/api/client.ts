@@ -58,4 +58,19 @@ export interface ApiClient {
 
   // Stats (auth/me)
   libraryStats(): Promise<{ total: number; enriched: number; pending: number; playlists: number }>
+
+  // Upload (frontend MVP)
+  uploadAudioFile(file: File, onProgress?: (phase: UploadPhase) => void): Promise<Track>
+  getTrackPeaks(trackId: string): Promise<number[] | null>
+  /** ¿el usuario ya subió archivos reales? — útil para esconder los mocks */
+  hasUploads(): Promise<boolean>
 }
+
+export type UploadPhase =
+  | 'reading'         // leyendo archivo
+  | 'parsing'         // ID3
+  | 'decoding'        // decodeAudioData
+  | 'analyzing'       // BPM/clave si faltan
+  | 'waveform'        // peaks
+  | 'saving'          // a IDB
+  | 'done'

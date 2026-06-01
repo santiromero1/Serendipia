@@ -46,6 +46,7 @@ export function useKeyboardShortcuts() {
       if (mod || isTyping(e.target)) return
       const k = e.key.toLowerCase()
       if (k === 'g') navigate('/graph')
+      else if (k === 'f') useUIStore.getState().toggleSidebar()
       else if (k === 'l') useUIStore.getState().setLibraryView('list')
       else if (k === 'b') useUIStore.getState().setLibraryView('grid')
     }
