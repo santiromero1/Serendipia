@@ -25,3 +25,4 @@ npm-debug.log*
 # datos locales de la biblioteca (privados): nunca al repo ni al build
 apps/web/.library-cache/
 .vercel
+.env*
