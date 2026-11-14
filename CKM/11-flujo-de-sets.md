@@ -27,7 +27,7 @@ Otras preguntas recurrentes: "¿con cuál no lo puedo tocar nunca?", "¿dónde m
 | Notas por tema | Mensajes sueltos | **Marcas en el capítulo**: sí o sí, extra, abre, peak, cierre, "juntos con", y una nota libre. |
 | Ordenar | Claude con reglas Camelot | **Ordenar** respeta las marcas: abre primero, cierre último, peak en el último tercio, pares juntos, extras al final de más a menos. Muestra la regla de cada paso. |
 | Versiones por duración | Pedido a Claude | **Recortar a**: 1 h, 1 h 30 o 2 h, conservando los sí o sí. |
-| Improvisar | "¿con cuál no va?" | Por tema, los que siguen bien y los que chocan dentro del capítulo. |
+| Ordenar a mano e improvisar | "¿con cuál no va?", "¿dónde meto este 4A?" | **Vista Orden**: la playlist en lista para arrastrar; cada paso muestra la regla Camelot o una alerta si choca. Con un tema elegido: dónde encaja (huecos compatibles con los dos vecinos), cuáles pueden ir antes o después, cuáles no pueden ir pegados y qué temas de la biblioteca lo siguen. Hecho. |
 | Volver a rekordbox | A mano | **Exportar a rekordbox**: XML con carpeta del set y una playlist por capítulo. Ya hecho. |
 | Charla libre | Claude en la terminal | **Asistente**: la frase ("este al final pero no último") se traduce a marcas y restricciones. Necesita una función en el servidor con la API de Claude. |
 

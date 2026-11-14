@@ -6,6 +6,7 @@ import { magicSort, matching, nextTracks, type Suggestion } from '@/lib/similari
 import { Btn, Chips, Cover, cx, fmtLong, PlayButton, range, Segmented } from '@/components/bits'
 import { SuggestionRow } from '@/components/DetailPanel'
 import { FromRekordbox } from '@/components/FromRekordbox'
+import { ChapterOrder } from '@/components/ChapterOrder'
 import { matchesFilters, useFilters } from '@/stores/filters'
 import { useLibrary } from '@/stores/library'
 import { CHAPTER_PRESETS, useActiveSet, useSets, type Chapter } from '@/stores/sets'
@@ -330,6 +331,7 @@ export function SetsPage() {
   const all = chapters.flatMap((c) => c.tracks)
   const inSet = useMemo(() => new Set(all.map((t) => t.id)), [all])
   const active = chapters.find((c) => c.chapter.id === activeChapterId) ?? null
+  const [view, setView] = useState<'chapters' | 'order'>('chapters')
 
   if (!set) {
     return (
@@ -369,6 +371,14 @@ export function SetsPage() {
               {chapters.length} capítulos · {all.length} temas · {fmtLong(all.reduce((s, t) => s + (t.duration ?? 0), 0))}
             </div>
           </div>
+          <Segmented
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'chapters', label: 'Capítulos' },
+              { value: 'order', label: 'Orden' },
+            ]}
+          />
           {sets.length > 1 && (
             <select
               aria-label="Cambiar de set"
@@ -409,6 +419,9 @@ export function SetsPage() {
           </div>
         </header>
 
+        {view === 'order' ? (
+          <ChapterOrder chapters={chapters} activeId={activeChapterId} inSet={inSet} />
+        ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           {chapters.map((c) => (
             <ChapterRow key={c.chapter.id} chapter={c.chapter} tracks={c.tracks} active={c.chapter.id === activeChapterId} root={root} />
@@ -419,8 +432,9 @@ export function SetsPage() {
             </Btn>
           </div>
         </div>
+        )}
       </div>
-      <Explorer chapter={active?.chapter ?? null} chapterTracks={active?.tracks ?? []} inSet={inSet} />
+      {view === 'chapters' && <Explorer chapter={active?.chapter ?? null} chapterTracks={active?.tracks ?? []} inSet={inSet} />}
     </div>
   )
 }
