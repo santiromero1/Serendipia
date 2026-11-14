@@ -1,181 +1,148 @@
 @import "tailwindcss";
 
-/* ───────────────────────────────────────────────────────────
-   Design tokens — fiel a CKM/3-design.md §2
-   ─────────────────────────────────────────────────────────── */
+/*
+ * Serendipia: negro, grafito y plateado.
+ * Escena: un DJ de noche, luz baja, armando el set en la notebook al lado de las bandejas.
+ * Neutros apenas fríos, un solo tono de señal, y color solo para datos (tonalidad, género).
+ */
 @theme {
-  /* Fondos */
-  --color-background: #0a0a0f;
-  --color-surface: #13131a;
-  --color-surface-raised: #1a1a24;
-  --color-border: #1e1e2e;
-  --color-border-strong: #2a2a3c;
+  --color-bg: oklch(0.145 0.004 260);
+  --color-surface: oklch(0.178 0.004 260);
+  --color-raised: oklch(0.215 0.005 260);
+  --color-hover: oklch(0.245 0.005 260);
+  --color-line: oklch(0.265 0.005 260);
+  --color-line-strong: oklch(0.36 0.006 260);
 
-  /* Acentos */
-  --color-primary: #7c3aed;
-  --color-primary-light: #a78bfa;
-  --color-cyan: #06b6d4;
-  --color-amber: #f59e0b;
-  --color-green: #10b981;
+  --color-fg: oklch(0.965 0.003 260);
+  --color-soft: oklch(0.76 0.006 260);
+  --color-faint: oklch(0.56 0.007 260);
+  --color-ghost: oklch(0.42 0.007 260);
 
-  /* Texto */
-  --color-fg: #f8f8ff;
-  --color-fg-soft: #94a3b8;
-  --color-fg-faint: #475569;
+  --color-signal: oklch(0.87 0.045 225);
+  --color-warn: oklch(0.8 0.1 75);
 
-  /* Semánticos */
-  --color-error: #f87171;
-  --color-warning: #fbbf24;
-  --color-success: #34d399;
-  --color-info: #38bdf8;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* Energía (nodos del grafo y barras) */
-  --color-energy-low: #3b82f6;
-  --color-energy-mid: #a78bfa;
-  --color-energy-high: #f59e0b;
-  --color-energy-peak: #ef4444;
-
-  /* Tipografía */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
-
-  /* Sombras */
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --shadow-glow-purple: 0 0 20px #7c3aed33;
-  --shadow-glow-cyan: 0 0 20px #06b6d433;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ───────────────────────────────────────────────────────────
-   Base
-   ─────────────────────────────────────────────────────────── */
 @layer base {
   * {
-    border-color: var(--color-border);
+    border-color: var(--color-line);
   }
-
   html {
     color-scheme: dark;
   }
-
   body {
     margin: 0;
-    background-color: var(--color-background);
-    color: var(--color-fg-soft);
+    background: var(--color-bg);
+    color: var(--color-soft);
     font-family: var(--font-sans);
-    font-size: 15px;
-    line-height: 1.5;
+    font-size: 13px;
+    line-height: 1.45;
     -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv11";
   }
-
-  h1, h2, h3, h4 {
-    color: var(--color-fg);
-    font-weight: 600;
+  button {
+    cursor: pointer;
   }
-
+  button:disabled {
+    cursor: default;
+  }
   ::selection {
-    background: #7c3aed55;
-    color: #fff;
+    background: oklch(0.87 0.045 225 / 0.3);
   }
-
-  /* Scrollbars discretas en dark mode */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-border-strong);
-    border-radius: 9999px;
-    border: 2px solid var(--color-background);
+    background: var(--color-line);
+    border-radius: 99px;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3a3a52;
+    background: var(--color-line-strong);
+    background-clip: content-box;
   }
-
-  /* Focus visible global (CKM/3-design.md §9) */
   :focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 1px solid var(--color-signal);
     outline-offset: 2px;
-    border-radius: 4px;
+  }
+  input[type="range"] {
+    accent-color: var(--color-fg);
   }
 }
 
-/* ───────────────────────────────────────────────────────────
-   Animaciones (CKM/3-design.md §5)
-   ─────────────────────────────────────────────────────────── */
-@keyframes slide-in-right {
-  from { transform: translateX(16px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes scale-in {
-  from { transform: scale(0.98); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-@keyframes pop {
-  0% { transform: scale(0.6); opacity: 0; }
-  70% { transform: scale(1.05); }
-  100% { transform: scale(1); opacity: 1; }
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
-.animate-slide-in-right { animation: slide-in-right 200ms ease-out; }
-.animate-fade-in { animation: fade-in 150ms ease-out; }
-.animate-scale-in { animation: scale-in 150ms ease-out; }
-.animate-pop { animation: pop 200ms ease-out; }
+@utility label {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 220ms var(--ease-out);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-/* ───────────────────────────────────────────────────────────
-   Dual range slider (BPM / energía)
-   ─────────────────────────────────────────────────────────── */
-.dual-range input[type="range"] {
+/* deslizador doble */
+.dual {
+  position: relative;
+  height: 18px;
+}
+.dual input {
   -webkit-appearance: none;
   appearance: none;
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
-  height: 100%;
   margin: 0;
   background: none;
   pointer-events: none;
 }
-.dual-range input[type="range"]::-webkit-slider-thumb {
+.dual input::-webkit-slider-thumb {
   -webkit-appearance: none;
-  appearance: none;
   pointer-events: auto;
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: #fff;
-  border: 2px solid var(--color-primary);
-  box-shadow: 0 0 0 4px #7c3aed22;
-  cursor: pointer;
+  width: 12px;
+  height: 12px;
+  border-radius: 99px;
+  background: var(--color-fg);
+  border: 0;
+  cursor: grab;
 }
-.dual-range input[type="range"]::-moz-range-thumb {
+.dual input::-moz-range-thumb {
   pointer-events: auto;
-  width: 16px;
-  height: 16px;
-  border-radius: 9999px;
-  background: #fff;
-  border: 2px solid var(--color-primary);
-  box-shadow: 0 0 0 4px #7c3aed22;
-  cursor: pointer;
-}
-.dual-range input[type="range"]::-webkit-slider-runnable-track {
-  background: transparent;
-}
-.dual-range input[type="range"]::-moz-range-track {
-  background: transparent;
+  width: 12px;
+  height: 12px;
+  border-radius: 99px;
+  background: var(--color-fg);
+  border: 0;
+  cursor: grab;
 }

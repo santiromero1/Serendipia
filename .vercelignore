@@ -1,0 +1,4 @@
+# datos personales de la biblioteca: nunca se suben
+apps/web/.library-cache
+**/node_modules
+**/dist

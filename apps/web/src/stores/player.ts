@@ -1,99 +1,70 @@
 import { create } from 'zustand'
 
-let audio: HTMLAudioElement | null = null
-
-function getAudio(): HTMLAudioElement {
-  if (audio) return audio
-  audio = new Audio()
-  audio.preload = 'metadata'
-  audio.addEventListener('timeupdate', () => {
-    usePlayerStore.setState({ position: audio!.currentTime })
-  })
-  audio.addEventListener('loadedmetadata', () => {
-    usePlayerStore.setState({ duration: audio!.duration })
-  })
-  audio.addEventListener('ended', () => {
-    usePlayerStore.setState({ isPlaying: false, position: 0 })
-  })
-  return audio
-}
+const audio = typeof Audio !== 'undefined' ? new Audio() : null
+if (audio) audio.preload = 'metadata'
 
 interface PlayerState {
-  currentTrackId: string | null
-  isPlaying: boolean
-  position: number
+  trackId: string | null
+  playing: boolean
+  time: number
   duration: number
-  volume: number
-
-  play: (trackId: string, audioUrl: string) => void
-  pause: () => void
+  /** escucha rápida: arranca en el cuerpo del tema, no en la intro */
+  fastPreview: boolean
+  error: string | null
+  play: (id: string) => void
   toggle: () => void
-  seek: (seconds: number) => void
-  /** seek a posición relativa 0–1 (útil para click en waveform) */
-  seekRatio: (ratio: number) => void
-  setVolume: (v: number) => void
-  stop: () => void
+  seek: (fraction: number) => void
+  setFastPreview: (v: boolean) => void
 }
 
-export const usePlayerStore = create<PlayerState>((set, get) => ({
-  currentTrackId: null,
-  isPlaying: false,
-  position: 0,
-  duration: 0,
-  volume: 0.85,
+export const usePlayer = create<PlayerState>((set, get) => {
+  if (audio) {
+    audio.addEventListener('timeupdate', () => set({ time: audio.currentTime }))
+    audio.addEventListener('durationchange', () => set({ duration: audio.duration || 0 }))
+    audio.addEventListener('play', () => set({ playing: true, error: null }))
+    audio.addEventListener('pause', () => set({ playing: false }))
+    audio.addEventListener('ended', () => set({ playing: false }))
+    audio.addEventListener('error', () => set({ playing: false, error: 'No se pudo reproducir el archivo' }))
+  }
+  return {
+    trackId: null,
+    playing: false,
+    time: 0,
+    duration: 0,
+    fastPreview: true,
+    error: null,
 
-  play(trackId, audioUrl) {
-    const a = getAudio()
-    if (get().currentTrackId !== trackId) {
-      a.src = audioUrl
-      a.currentTime = 0
-      set({ currentTrackId: trackId, position: 0, duration: 0 })
-    }
-    a.volume = get().volume
-    void a.play().catch(() => set({ isPlaying: false }))
-    set({ isPlaying: true })
-  },
+    play(id) {
+      if (!audio) return
+      if (get().trackId === id) {
+        get().toggle()
+        return
+      }
+      set({ trackId: id, time: 0, duration: 0, error: null })
+      audio.src = `/audio/${id}`
+      if (get().fastPreview) {
+        audio.addEventListener(
+          'loadedmetadata',
+          () => {
+            if (Number.isFinite(audio.duration)) audio.currentTime = audio.duration * 0.35
+          },
+          { once: true },
+        )
+      }
+      audio.play().catch(() => set({ playing: false }))
+    },
 
-  pause() {
-    const a = getAudio()
-    a.pause()
-    set({ isPlaying: false })
-  },
+    toggle() {
+      if (!audio || !get().trackId) return
+      if (audio.paused) audio.play().catch(() => {})
+      else audio.pause()
+    },
 
-  toggle() {
-    const s = get()
-    if (!s.currentTrackId) return
-    if (s.isPlaying) get().pause()
-    else {
-      const a = getAudio()
-      void a.play().catch(() => set({ isPlaying: false }))
-      set({ isPlaying: true })
-    }
-  },
+    seek(fraction) {
+      if (!audio || !Number.isFinite(audio.duration)) return
+      audio.currentTime = audio.duration * Math.max(0, Math.min(1, fraction))
+    },
 
-  seek(seconds) {
-    const a = getAudio()
-    a.currentTime = seconds
-    set({ position: seconds })
-  },
-
-  seekRatio(ratio) {
-    const s = get()
-    if (!s.duration) return
-    get().seek(Math.max(0, Math.min(s.duration, ratio * s.duration)))
-  },
-
-  setVolume(v) {
-    const a = getAudio()
-    const vol = Math.max(0, Math.min(1, v))
-    a.volume = vol
-    set({ volume: vol })
-  },
-
-  stop() {
-    const a = getAudio()
-    a.pause()
-    a.currentTime = 0
-    set({ isPlaying: false, currentTrackId: null, position: 0, duration: 0 })
-  },
-}))
+    setFastPreview: (fastPreview) => set({ fastPreview }),
+  }
+})

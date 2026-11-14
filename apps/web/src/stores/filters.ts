@@ -1,102 +1,83 @@
 import { create } from 'zustand'
-import type { TrackFilters } from '@serendipia/types'
+import type { Track } from '@/lib/types'
 
-type SortBy = NonNullable<TrackFilters['sort_by']>
-type SortOrder = NonNullable<TrackFilters['sort_order']>
+export type Range = [number, number]
 
-interface FilterState {
+export const BPM_LIMITS: Range = [90, 150]
+export const SCALE_LIMITS: Range = [1, 10]
+
+interface Values {
   search: string
-  bpmMin: number
-  bpmMax: number
+  bpm: Range
+  energy: Range
+  dance: Range
+  bright: Range
   keys: string[]
-  energyMin: number
-  energyMax: number
-  danceMin: number
-  danceMax: number
-  valenceMin: number
-  valenceMax: number
   genres: string[]
+  crates: string[]
   tags: string[]
-  sortBy: SortBy
-  sortOrder: SortOrder
-
-  setSearch: (v: string) => void
-  setBpm: (min: number, max: number) => void
-  setEnergy: (min: number, max: number) => void
-  setDance: (min: number, max: number) => void
-  setValence: (min: number, max: number) => void
-  toggleKey: (k: string) => void
-  toggleGenre: (g: string) => void
-  toggleTag: (t: string) => void
-  setSort: (by: SortBy, order: SortOrder) => void
-  reset: () => void
-  toFilters: () => TrackFilters
-  activeCount: () => number
 }
 
-export const BPM_RANGE = { min: 90, max: 180 }
-
-const initial = {
+const initial: Values = {
   search: '',
-  bpmMin: BPM_RANGE.min,
-  bpmMax: BPM_RANGE.max,
-  keys: [] as string[],
-  energyMin: 0,
-  energyMax: 1,
-  danceMin: 0,
-  danceMax: 1,
-  valenceMin: 0,
-  valenceMax: 1,
-  genres: [] as string[],
-  tags: [] as string[],
-  sortBy: 'created_at' as SortBy,
-  sortOrder: 'desc' as SortOrder,
+  bpm: BPM_LIMITS,
+  energy: SCALE_LIMITS,
+  dance: SCALE_LIMITS,
+  bright: SCALE_LIMITS,
+  keys: [],
+  genres: [],
+  crates: [],
+  tags: [],
 }
 
-const toggle = (arr: string[], v: string) =>
-  arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]
+type ListField = 'keys' | 'genres' | 'crates' | 'tags'
+type RangeField = 'bpm' | 'energy' | 'dance' | 'bright'
 
-export const useFilterStore = create<FilterState>((set, get) => ({
+interface FilterState extends Values {
+  setSearch: (v: string) => void
+  setRange: (field: RangeField, v: Range) => void
+  toggle: (field: ListField, v: string) => void
+  reset: () => void
+}
+
+export const useFilters = create<FilterState>((set) => ({
   ...initial,
-
-  setSearch: (v) => set({ search: v }),
-  setBpm: (min, max) => set({ bpmMin: min, bpmMax: max }),
-  setEnergy: (min, max) => set({ energyMin: min, energyMax: max }),
-  setDance: (min, max) => set({ danceMin: min, danceMax: max }),
-  setValence: (min, max) => set({ valenceMin: min, valenceMax: max }),
-  toggleKey: (k) => set((s) => ({ keys: toggle(s.keys, k) })),
-  toggleGenre: (g) => set((s) => ({ genres: toggle(s.genres, g) })),
-  toggleTag: (t) => set((s) => ({ tags: toggle(s.tags, t) })),
-  setSort: (by, order) => set({ sortBy: by, sortOrder: order }),
-  reset: () => set({ ...initial }),
-
-  toFilters: () => {
-    const s = get()
-    const f: TrackFilters = { sort_by: s.sortBy, sort_order: s.sortOrder }
-    if (s.search.trim()) f.search = s.search.trim()
-    if (s.bpmMin > BPM_RANGE.min) f.bpm_min = s.bpmMin
-    if (s.bpmMax < BPM_RANGE.max) f.bpm_max = s.bpmMax
-    if (s.energyMin > 0) f.energy_min = s.energyMin
-    if (s.energyMax < 1) f.energy_max = s.energyMax
-    if (s.danceMin > 0) f.danceability_min = s.danceMin
-    if (s.danceMax < 1) f.danceability_max = s.danceMax
-    if (s.valenceMin > 0) f.valence_min = s.valenceMin
-    if (s.valenceMax < 1) f.valence_max = s.valenceMax
-    if (s.keys.length) f.key_camelot = s.keys
-    if (s.genres.length) f.genre = s.genres
-    if (s.tags.length) f.tags = s.tags
-    return f
-  },
-
-  activeCount: () => {
-    const s = get()
-    let n = 0
-    if (s.search.trim()) n++
-    if (s.bpmMin > BPM_RANGE.min || s.bpmMax < BPM_RANGE.max) n++
-    if (s.energyMin > 0 || s.energyMax < 1) n++
-    if (s.danceMin > 0 || s.danceMax < 1) n++
-    if (s.valenceMin > 0 || s.valenceMax < 1) n++
-    n += s.keys.length + s.genres.length + s.tags.length
-    return n
-  },
+  setSearch: (search) => set({ search }),
+  setRange: (field, v) => set({ [field]: v } as Partial<Values>),
+  toggle: (field, v) =>
+    set((s) => ({ [field]: s[field].includes(v) ? s[field].filter((x) => x !== v) : [...s[field], v] }) as Partial<Values>),
+  reset: () => set(initial),
 }))
+
+const full = (r: Range, lim: Range) => r[0] <= lim[0] && r[1] >= lim[1]
+
+export function activeFilterCount(f: Values): number {
+  return (
+    (f.search ? 1 : 0) +
+    (full(f.bpm, BPM_LIMITS) ? 0 : 1) +
+    (['energy', 'dance', 'bright'] as const).filter((k) => !full(f[k], SCALE_LIMITS)).length +
+    (f.keys.length ? 1 : 0) +
+    (f.genres.length ? 1 : 0) +
+    (f.crates.length ? 1 : 0) +
+    (f.tags.length ? 1 : 0)
+  )
+}
+
+/** Un rango acotado excluye los temas sin ese dato; un rango completo no filtra. */
+const inRange = (v: number | null, r: Range, lim: Range) => full(r, lim) || (v != null && v >= r[0] && v <= r[1])
+
+export function matchesFilters(t: Track, f: Values): boolean {
+  if (!inRange(t.bpm, f.bpm, BPM_LIMITS)) return false
+  if (!inRange(t.energy, f.energy, SCALE_LIMITS)) return false
+  if (!inRange(t.dance, f.dance, SCALE_LIMITS)) return false
+  if (!inRange(t.bright, f.bright, SCALE_LIMITS)) return false
+  if (f.keys.length && !(t.key && f.keys.includes(t.key))) return false
+  if (f.genres.length && !f.genres.includes(t.genre)) return false
+  if (f.crates.length && !f.crates.includes(`${t.genre}/${t.crate ?? ''}`)) return false
+  if (f.tags.length && !f.tags.some((g) => t.tags.includes(g))) return false
+  if (f.search) {
+    const hay = `${t.artist} ${t.title} ${t.label ?? ''} ${t.crate ?? ''} ${t.genre}`.toLowerCase()
+    if (!f.search.toLowerCase().split(/\s+/).every((w) => hay.includes(w))) return false
+  }
+  return true
+}
