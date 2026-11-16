@@ -557,8 +557,8 @@ async function main() {
     for (const t of tracks) if (!t._emb) delete t.x, delete t.y
     const r = galaxy.report
     console.log(`Galaxia: ${r.temas} temas en ${r.grupos} grupos · ${r.raros} raros · ${r.sinGrupo} sin grupo`)
-    console.log(`  vecinos del mismo género: huella ${r.genero.huella}% · medidas simples ${r.genero.simple}% · azar ${r.genero.azar}%`)
-    console.log(`  vecinos del mismo cajón:  huella ${r.cajon.huella}% · medidas simples ${r.cajon.simple}% · azar ${r.cajon.azar}%`)
+    console.log(`  vecinos del mismo género: huella ${r.genero.huella}% · huella + tags ${r.genero.conTags}% · medidas simples ${r.genero.simple}% · azar ${r.genero.azar}%`)
+    console.log(`  vecinos del mismo cajón:  huella ${r.cajon.huella}% · huella + tags ${r.cajon.conTags}% · medidas simples ${r.cajon.simple}% · azar ${r.cajon.azar}%`)
     for (const c of galaxy.clusters) console.log(`  ${String(c.n).padStart(4)}  ${c.label}`)
   }
   for (const t of tracks) {

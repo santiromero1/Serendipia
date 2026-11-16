@@ -58,8 +58,8 @@ export interface GalaxyReport {
   grupos: number
   raros: number
   sinGrupo: number
-  genero: { huella: number; simple: number; azar: number }
-  cajon: { huella: number; simple: number; azar: number }
+  genero: { huella: number; conTags?: number; simple: number; azar: number }
+  cajon: { huella: number; conTags?: number; simple: number; azar: number }
 }
 
 export interface Library {

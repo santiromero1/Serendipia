@@ -53,6 +53,20 @@ Medido en la biblioteca del autor (700 temas analizados), tomando sus carpetas c
 | Mismo género (carpeta raíz) | 66% | 49% | 31% |
 | Mismo cajón (subcarpeta por vibra) | 21% | 13% | 7% |
 
+### Género y sello de los tags
+
+Los archivos comprados traen género y sello en sus tags, y el XML de rekordbox también. En esta biblioteca, 575 de 709 temas tienen género y 567 tienen sello (279 sellos distintos; 53 con tres o más temas).
+
+- El género de Beatport es fiable: los 147 temas etiquetados "Progressive House" están en la carpeta Progressive. Los de otras fuentes no dicen nada ("Electro", "Dance", "Music") y se ignoran.
+- Se suman al parecido sonoro como un empujón: +0,25 si comparten género del tag y +0,20 si comparten sello, sobre un coseno que entre vecinos ronda 0,5 a 0,9. El sonido sigue mandando.
+
+| | Solo huella | Huella + tags |
+|---|---|---|
+| Mismo género | 66% | 72% |
+| Mismo cajón | 21% | 24% |
+
+La mejora es chica porque la huella ya captura casi todo lo que el género del tag dice. Con pesos más altos sube un poco más (74% y 25%), pero el mapa se parte en grupos por sello. La comparación de género es algo circular: las carpetas se armaron mirando esos mismos tags.
+
 Lectura: sin ninguna categorización, el audio recupera bien el género. Los cajones por vibra dentro de un género (WARM, DEEP, DDTGS) se recuperan poco: son criterio personal del DJ y el modelo no los ve. Categorizar sigue aportando; lo que cambia es que ya no hace falta para tener un mapa útil.
 
 ## En la app

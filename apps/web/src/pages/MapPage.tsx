@@ -390,7 +390,7 @@ export function MapPage() {
         />
         <span className="ml-auto truncate text-[11.5px] text-faint">
           {mode === 'near' && hasGalaxy && report
-            ? `Ubicados solo por cómo suenan: ${report.genero.huella}% de los vecinos de cada tema está en tu misma carpeta.`
+            ? `Ubicados por sonido y tags, sin tus carpetas: ${report.genero.conTags ?? report.genero.huella}% de los vecinos de cada tema está en tu misma carpeta.`
             : 'Shift + arrastrar selecciona una zona.'}
           {missing > 0 && ` ${missing} temas sin análisis no aparecen.`}
         </span>

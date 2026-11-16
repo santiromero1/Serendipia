@@ -34,6 +34,22 @@ function rng(seed) {
 
 const shortStyle = (s) => s.split('---').pop()
 
+/** Peso de los tags sobre el parecido sonoro (coseno, que entre vecinos ronda 0,5 a 0,9). */
+const W_GENRE = Number(process.env.GAL_WG ?? 0.25)
+const W_LABEL = Number(process.env.GAL_WL ?? 0.2)
+
+/** Género del tag, solo si dice algo: "Electro", "Dance" o "Music" vienen de fuentes que etiquetan todo igual. */
+export function genreKey(tag) {
+  const g = tag?.trim().toLowerCase()
+  if (!g || g.includes(';') || /^(electro|dance|music|electronica|electronic|other|otro|unknown)$/.test(g)) return null
+  return g.replace(/\s*[/&]\s*/g, ' & ')
+}
+/** Sello sin sufijos, para que "Bedrock" y "Bedrock Records" cuenten como el mismo. */
+export function labelKey(label) {
+  const l = label?.trim().toLowerCase().replace(/\s+(records?|recordings|music|musik|digital)$/g, '')
+  return l || null
+}
+
 /** Matriz de cosenos entre huellas centradas y normalizadas. */
 function similarity(embs) {
   const n = embs.length
@@ -126,15 +142,26 @@ export function buildGalaxy(tracks) {
   const T = idx.map((i) => tracks[i])
   const G = similarity(T.map((t) => t._emb))
 
+  // el sonido manda; compartir género del tag o sello acerca un poco más
+  const gk = T.map((t) => genreKey(t.tagGenre))
+  const lk = T.map((t) => labelKey(t.label))
+  const S = G.map((row, i) => row.map((v, j) => v + (gk[i] && gk[i] === gk[j] ? W_GENRE : 0) + (lk[i] && lk[i] === lk[j] ? W_LABEL : 0)))
+  const soundOrder = G.map((row, i) =>
+    Array.from(row.keys())
+      .filter((j) => j !== i)
+      .sort((a, b) => row[b] - row[a])
+      .slice(0, 10),
+  )
+
   // vecinos
-  const order = G.map((row, i) =>
+  const order = S.map((row, i) =>
     Array.from(row.keys())
       .filter((j) => j !== i)
       .sort((a, b) => row[b] - row[a])
       .slice(0, 30),
   )
   const knn = order.map((o) => new Set(o.slice(0, K)))
-  const closeness = order.map((o, i) => o.slice(0, 5).reduce((s, j) => s + G[i][j], 0) / 5)
+  const closeness = order.map((o, i) => o.slice(0, 5).reduce((s, j) => s + S[i][j], 0) / 5)
   const cutoff = [...closeness].sort((a, b) => a - b)[Math.floor(n * OUTLIER_SHARE)]
   const rare = closeness.map((c) => c <= cutoff)
 
@@ -145,7 +172,7 @@ export function buildGalaxy(tracks) {
     if (rare[i]) continue
     for (const j of knn[i]) {
       if (j <= i || rare[j] || !knn[j].has(i)) continue
-      const w = Math.max(0.01, G[i][j])
+      const w = Math.max(0.01, Math.min(1, S[i][j]))
       graph.addEdge(i, j, { weight: w })
       edges.push([i, j, w])
     }
@@ -169,6 +196,11 @@ export function buildGalaxy(tracks) {
     const votes = new Map()
     for (const i of members) for (const [s, p] of T[i]._styles ?? []) votes.set(shortStyle(s), (votes.get(shortStyle(s)) ?? 0) + p)
     const top = [...votes].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+    // si buena parte del grupo comparte género en sus tags, ese nombre es el que el DJ reconoce
+    const tagged = new Map()
+    for (const i of members) if (gk[i]) tagged.set(T[i].tagGenre.trim(), (tagged.get(T[i].tagGenre.trim()) ?? 0) + 1)
+    const [tagName, tagCount] = [...tagged].sort((a, b) => b[1] - a[1])[0] ?? []
+    if (tagName && tagCount >= members.length * 0.4) top.unshift(...[tagName].filter((n) => n !== top[0]))
     const energies = members.map((i) => T[i].energy).filter((e) => e != null)
     return { id: c, n: members.length, top, energy: energies.reduce((a, b) => a + b, 0) / (energies.length || 1), label: top[0] ?? `Grupo ${c + 1}` }
   })
@@ -206,7 +238,7 @@ export function buildGalaxy(tracks) {
   // grupos parecidos entre sí quedan vecinos: cada centro se une a sus dos centros más cercanos
   const between = (a, b) => {
     let s = 0
-    for (const i of clusters[a]) for (const j of clusters[b]) s += G[i][j]
+    for (const i of clusters[a]) for (const j of clusters[b]) s += S[i][j]
     return s / (clusters[a].length * clusters[b].length)
   }
   clusters.forEach((_, a) => {
@@ -322,8 +354,8 @@ export function buildGalaxy(tracks) {
       grupos: clusters.length,
       raros: rare.filter(Boolean).length,
       sinGrupo: clusterOf.filter((c) => c == null).length,
-      genero: { huella: pct(purity(order, genres)), simple: pct(purity(basicOrder, genres)), azar: pct(chance(genres)) },
-      cajon: { huella: pct(purity(order, crates)), simple: pct(purity(basicOrder, crates)), azar: pct(chance(crates)) },
+      genero: { huella: pct(purity(soundOrder, genres)), conTags: pct(purity(order, genres)), simple: pct(purity(basicOrder, genres)), azar: pct(chance(genres)) },
+      cajon: { huella: pct(purity(soundOrder, crates)), conTags: pct(purity(order, crates)), simple: pct(purity(basicOrder, crates)), azar: pct(chance(crates)) },
     },
   }
 }

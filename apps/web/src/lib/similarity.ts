@@ -4,6 +4,15 @@ import { keyRule, type KeyRule } from './harmony'
 const gap = (a: number | null, b: number | null, span: number) =>
   a == null || b == null ? 0.5 : Math.min(1, Math.abs(a - b) / span)
 
+/** Mismas reglas que scripts/galaxy.mjs: el género del tag cuenta solo si dice algo, y el sello va sin sufijos. */
+function genreKey(tag: string | null): string | null {
+  const g = tag?.trim().toLowerCase()
+  if (!g || g.includes(';') || /^(electro|dance|music|electronica|electronic|other|otro|unknown)$/.test(g)) return null
+  return g.replace(/\s*[/&]\s*/g, ' & ')
+}
+const labelKey = (label: string | null) => label?.trim().toLowerCase().replace(/\s+(records?|recordings|music|musik|digital)$/g, '') || null
+const sameTag = (a: string | null, b: string | null) => a != null && a === b
+
 const decoded = new Map<string, Float32Array>()
 /** Huella sonora del tema, normalizada. */
 function fingerprint(t: Track): Float32Array | null {
@@ -27,7 +36,7 @@ function fingerprint(t: Track): Float32Array | null {
 
 /**
  * Distancia entre dos temas, 0 (iguales) a ~1.5.
- * Con huella sonora: 1 − coseno entre huellas, más un poco de BPM. No mira carpetas.
+ * Con huella sonora: 1 − coseno entre huellas, acercando a los que comparten género del tag o sello, más un poco de BPM. No mira carpetas.
  * Sin huella: energía, bailabilidad, brillo y BPM, más una penalidad por género y cajón distintos.
  */
 export function distance(a: Track, b: Track): number {
@@ -36,7 +45,8 @@ export function distance(a: Track, b: Track): number {
   if (fa && fb) {
     let dot = 0
     for (let i = 0; i < fa.length; i++) dot += fa[i] * fb[i]
-    return Math.max(0, 1 - dot) + gap(a.bpm, b.bpm, 12) * 0.15
+    const tags = (sameTag(genreKey(a.tagGenre), genreKey(b.tagGenre)) ? 0.25 : 0) + (sameTag(labelKey(a.label), labelKey(b.label)) ? 0.2 : 0)
+    return Math.max(0, 1 - dot - tags) + gap(a.bpm, b.bpm, 12) * 0.15
   }
   const sound = Math.sqrt(
     (gap(a.energy, b.energy, 9) ** 2 * 1.2 +
