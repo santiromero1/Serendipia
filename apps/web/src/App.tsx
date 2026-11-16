@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
-import { LayoutList, Rows3, ScatterChart, SlidersHorizontal } from 'lucide-react'
+import { LayoutList, Lightbulb, Rows3, ScatterChart, SlidersHorizontal } from 'lucide-react'
 import { cx } from '@/components/bits'
 import { DetailPanel } from '@/components/DetailPanel'
 import { FiltersPanel } from '@/components/FiltersPanel'
 import { Welcome } from '@/components/ImportXml'
 import { PlayerBar } from '@/components/PlayerBar'
+import { AdvicePage } from '@/pages/AdvicePage'
 import { LibraryPage } from '@/pages/LibraryPage'
 import { MapPage } from '@/pages/MapPage'
 import { SetsPage } from '@/pages/SetsPage'
@@ -18,6 +19,7 @@ const NAV = [
   { to: '/', label: 'Biblioteca', icon: LayoutList },
   { to: '/mapa', label: 'Mapa', icon: ScatterChart },
   { to: '/sets', label: 'Sets', icon: Rows3 },
+  { to: '/consejos', label: 'Consejos', icon: Lightbulb },
 ]
 
 function Rail() {
@@ -94,6 +96,7 @@ export default function App() {
               <Route path="/" element={<LibraryPage />} />
               <Route path="/mapa" element={<MapPage />} />
               <Route path="/sets" element={<SetsPage />} />
+              <Route path="/consejos" element={<AdvicePage />} />
               <Route path="*" element={<LibraryPage />} />
             </Routes>
           </main>

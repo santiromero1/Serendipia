@@ -20,7 +20,13 @@ const louvain = louvainPkg.default ?? louvainPkg
 const K = 10
 const PCA_DIMS = 48
 const MIN_CLUSTER = 5
-const OUTLIER_SHARE = 0.06
+const MIN_ISLAND = 3
+/**
+ * Alcance: dos temas solo se conectan si su distancia no pasa de 1,25 veces la distancia típica
+ * al quinto vecino en esa biblioteca. Sin este tope, un tema de otro mundo se engancha igual
+ * a "los menos distintos" y termina dentro de un grupo que no le corresponde.
+ */
+const REACH = 1.25
 
 function rng(seed) {
   return () => {
@@ -56,6 +62,7 @@ function similarity(embs) {
   const d = embs[0].length
   const mean = new Float64Array(d)
   for (const e of embs) for (let i = 0; i < d; i++) mean[i] += e[i] / n
+  const norms = []
   const X = embs.map((e) => {
     const v = new Float32Array(d)
     let norm = 0
@@ -64,6 +71,7 @@ function similarity(embs) {
       norm += v[i] * v[i]
     }
     norm = Math.sqrt(norm) || 1
+    norms.push(norm)
     for (let i = 0; i < d; i++) v[i] /= norm
     return v
   })
@@ -78,7 +86,12 @@ function similarity(embs) {
       G[i][j] = G[j][i] = s
     }
   }
-  return G
+  // distancia euclídea entre huellas, en unidades de "distancia típica al quinto vecino"
+  const D = G.map((row, i) => row.map((c, j) => Math.sqrt(Math.max(0, norms[i] ** 2 + norms[j] ** 2 - 2 * norms[i] * norms[j] * c))))
+  const fifth = D.map((row, i) => Array.from(row).filter((_, j) => j !== i).sort((a, b) => a - b)[4]).sort((a, b) => a - b)
+  const unit = fifth[Math.floor(n / 2)] || 1
+  for (const row of D) for (let j = 0; j < n; j++) row[j] /= unit
+  return { G, D }
 }
 
 /** Componentes principales desde la matriz de Gram (iteración de potencias con deflación). */
@@ -140,7 +153,7 @@ export function buildGalaxy(tracks) {
   const n = idx.length
   if (n < 30) return null
   const T = idx.map((i) => tracks[i])
-  const G = similarity(T.map((t) => t._emb))
+  const { G, D } = similarity(T.map((t) => t._emb))
 
   // el sonido manda; compartir género del tag o sello acerca un poco más
   const gk = T.map((t) => genreKey(t.tagGenre))
@@ -161,17 +174,13 @@ export function buildGalaxy(tracks) {
       .slice(0, 30),
   )
   const knn = order.map((o) => new Set(o.slice(0, K)))
-  const closeness = order.map((o, i) => o.slice(0, 5).reduce((s, j) => s + S[i][j], 0) / 5)
-  const cutoff = [...closeness].sort((a, b) => a - b)[Math.floor(n * OUTLIER_SHARE)]
-  const rare = closeness.map((c) => c <= cutoff)
 
   const graph = new Graph({ type: 'undirected' })
   for (let i = 0; i < n; i++) graph.addNode(i)
   const edges = []
   for (let i = 0; i < n; i++) {
-    if (rare[i]) continue
     for (const j of knn[i]) {
-      if (j <= i || rare[j] || !knn[j].has(i)) continue
+      if (j <= i || !knn[j].has(i) || D[i][j] > REACH) continue
       const w = Math.max(0.01, Math.min(1, S[i][j]))
       graph.addEdge(i, j, { weight: w })
       edges.push([i, j, w])
@@ -187,7 +196,31 @@ export function buildGalaxy(tracks) {
     if (!groups.has(c)) groups.set(c, [])
     groups.get(c).push(i)
   }
-  const clusters = [...groups.values()].filter((m) => m.length >= MIN_CLUSTER).sort((a, b) => b.length - a.length)
+  // una isla chica vale como grupo si es un componente entero: conectada entre sí y con nadie más
+  const component = new Array(n).fill(-1)
+  const componentSize = []
+  for (let i = 0; i < n; i++) {
+    if (component[i] >= 0) continue
+    const id = componentSize.length
+    const queue = [i]
+    component[i] = id
+    let size = 0
+    while (queue.length) {
+      const u = queue.pop()
+      size++
+      graph.forEachNeighbor(u, (v) => {
+        const k = Number(v)
+        if (component[k] < 0) {
+          component[k] = id
+          queue.push(k)
+        }
+      })
+    }
+    componentSize.push(size)
+  }
+  const isIsland = (m) => m.length >= MIN_ISLAND && componentSize[component[m[0]]] === m.length
+  const clusters = [...groups.values()].filter((m) => m.length >= MIN_CLUSTER || isIsland(m)).sort((a, b) => b.length - a.length)
+  const rare = Array.from({ length: n }, (_, i) => !graph.degree(i))
   const clusterOf = new Array(n).fill(null)
   clusters.forEach((members, c) => members.forEach((i) => (clusterOf[i] = c)))
 
@@ -241,14 +274,23 @@ export function buildGalaxy(tracks) {
     for (const i of clusters[a]) for (const j of clusters[b]) s += S[i][j]
     return s / (clusters[a].length * clusters[b].length)
   }
-  clusters.forEach((_, a) => {
+  // y la separación crece con la diferencia: grupos afines casi se tocan, una isla de otro mundo queda apartada
+  const far = (a, b) => {
+    let s = 0
+    for (const i of clusters[a]) for (const j of clusters[b]) s += D[i][j]
+    return s / (clusters[a].length * clusters[b].length)
+  }
+  const nearest = clusters.map((_, a) =>
     clusters
       .map((_, b) => b)
       .filter((b) => b !== a)
       .sort((x, y) => between(a, y) - between(a, x))
-      .slice(0, 2)
-      .forEach((b) => links.push({ source: `h${a}`, target: `h${b}`, kind: 'bridge', size: clusters[a].length + clusters[b].length }))
-  })
+      .slice(0, 2),
+  )
+  const typical = nearest.map((nb, a) => (nb.length ? far(a, nb[0]) : 0)).sort((x, y) => x - y)[Math.floor(clusters.length / 2)] ?? 0
+  nearest.forEach((nb, a) =>
+    nb.forEach((b) => links.push({ source: `h${a}`, target: `h${b}`, kind: 'bridge', size: clusters[a].length + clusters[b].length, extra: Math.max(0, far(a, b) - typical) * 170 })),
+  )
 
   // fase 1: los grupos. Resortes en las conexiones, repulsión entre todos y gravedad al centro.
   const grouped = nodes.filter((nd) => nd.cluster != null)
@@ -261,7 +303,7 @@ export function buildGalaxy(tracks) {
       'link',
       forceLink(coreLinks)
         .id((d) => d.id)
-        .distance((l) => (l.kind === 'near' ? 13 : l.kind === 'spoke' ? 9 + 2.4 * Math.sqrt(l.size) : 26 + 3.6 * Math.sqrt(l.size)))
+        .distance((l) => (l.kind === 'near' ? 13 : l.kind === 'spoke' ? 9 + 2.4 * Math.sqrt(l.size) : 26 + 3.6 * Math.sqrt(l.size) + l.extra))
         .strength((l) => (l.kind === 'near' ? 0.1 * l.w : l.kind === 'spoke' ? 0.42 : 0.09)),
     )
     .force('charge', forceManyBody().strength((d) => (d.hub ? -80 - 5 * Math.sqrt(d.size) : -11)).distanceMax(240))

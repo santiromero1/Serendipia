@@ -69,6 +69,26 @@ La mejora es chica porque la huella ya captura casi todo lo que el género del t
 
 Lectura: sin ninguna categorización, el audio recupera bien el género. Los cajones por vibra dentro de un género (WARM, DEEP, DDTGS) se recuperan poco: son criterio personal del DJ y el modelo no los ve. Categorizar sigue aportando; lo que cambia es que ya no hace falta para tener un mapa útil.
 
+## Islas y temas de otro mundo
+
+Problema detectado con las acapellas del autor: aunque el modelo las reconoce como rap, folk o dancehall, quedaban dentro de un grupo de house. Tres causas y sus arreglos:
+
+- **Conexión sin mínimo.** Cada tema se unía a sus 10 más parecidos aunque el parecido fuera bajo. Ahora hay un alcance: dos temas solo se conectan si su distancia no pasa de 1,25 veces la distancia típica al quinto vecino en esa biblioteca. El coseno centrado no sirve para este tope, porque hace que todos los temas atípicos se parezcan entre sí; se usa la distancia euclídea entre huellas.
+- **Grupos chicos absorbidos.** Un grupo de 3 o más temas vale como isla si está conectado entre sí y con nadie más.
+- **Separación uniforme.** La distancia entre centros de grupos ahora crece con la diferencia entre ellos.
+
+Resultado en esta biblioteca: 3 de las 5 acapellas pasan al anillo exterior; las otras 2 (voces corales) siguen unidas a un grupo porque para el modelo están dentro del alcance de dos temas muy vocales. No hay rap real en la biblioteca para probar una isla completa.
+
+## Consejos de categorización
+
+Vista **Consejos**: temas cuyos 12 vecinos más parecidos (sonido y tags) viven casi todos en otra carpeta, o en otro cajón de la misma carpeta.
+
+- Otra carpeta: 7 o más de 12 vecinos en el destino, 2 o menos en la carpeta actual, y al menos 1,8 veces lo esperable por el tamaño del destino. Sin esa corrección, casi todo "sonaba a Progressive" solo porque es la mitad de la biblioteca.
+- Otro cajón: entre los vecinos de la misma carpeta (8 o más), 60% o más en el destino, 1 o menos en el cajón actual, y 1,5 veces lo esperable.
+- Las carpetas `SET` se ignoran: son copias armadas a mano.
+
+Son pistas para escuchar, no correcciones: los cajones por vibra se recuperan poco desde el sonido (24%), y hay cajones que no dependen del sonido (por ejemplo, uno por país de origen). Cada consejo muestra los vecinos que lo justifican y se puede marcar como revisado. Serendipia no mueve archivos.
+
 ## En la app
 
 - **Mapa > Galaxia**: disco con grupos nombrados y red tenue. Color opcional por carpetas propias, estilo detectado, energía o tonalidad. Clic en un grupo lo selecciona y permite crear un capítulo.
