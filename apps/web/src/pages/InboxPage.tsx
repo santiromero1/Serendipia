@@ -3,6 +3,7 @@ import { AlertTriangle, Check, RefreshCw, Trash2 } from 'lucide-react'
 import { Btn, cx, fmtDuration, PlayButton } from '@/components/bits'
 import { useLibrary } from '@/stores/library'
 import { useActiveSet, useSets } from '@/stores/sets'
+import { TourButton } from '@/components/Tour'
 import { useUI } from '@/stores/ui'
 
 interface Place {
@@ -281,6 +282,7 @@ export function InboxPage() {
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="flex h-11 shrink-0 items-center gap-3 px-5">
         <h1 className="text-[14px] font-medium text-fg">Bandeja</h1>
+        <TourButton screen="inbox" />
         <span className="num text-[12px] text-faint">{rows ? `${pending} por clasificar` : 'buscando'}</span>
         <span className="ml-auto flex items-center gap-2">
           {scan.msg && <span className="max-w-[420px] truncate text-[11.5px] text-faint">{scan.msg}</span>}
@@ -296,7 +298,7 @@ export function InboxPage() {
         Temas de audio en <span className="num">{dir}</span>. Para cada uno se sugieren hasta tres cajones según a qué se parece de lo que ya tenés; el nombre se puede editar. Nada se
         mueve hasta que tocás Mover. Con una tarjeta elegida: 1, 2, 3 cambian el destino y Enter mueve. Después importalos en rekordbox para que analice la tonalidad.
       </p>
-      <ul className="min-h-0 flex-1 overflow-y-auto border-t border-line">
+      <ul data-tour="inbox-list" className="min-h-0 flex-1 overflow-y-auto border-t border-line">
         {rows?.length === 0 && <li className="px-5 py-10 text-[13px] text-faint">No hay temas de audio en la carpeta de descargas.</li>}
         {rows?.map((r, i) => (
           <Card

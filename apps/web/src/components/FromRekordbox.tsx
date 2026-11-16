@@ -37,6 +37,7 @@ export function FromRekordbox() {
   return (
     <select
       aria-label="Abrir desde rekordbox"
+      data-tour="sets-open"
       value=""
       onChange={(e) => e.target.value && open(e.target.value)}
       className="h-7 max-w-[220px] rounded-[5px] border border-line bg-transparent px-1.5 text-[12px] text-soft outline-none hover:border-line-strong hover:text-fg"

@@ -61,13 +61,13 @@ export function PlayerBar() {
 
   if (!canPlay)
     return (
-      <footer className="flex h-9 shrink-0 items-center border-t border-line px-4 text-[11.5px] text-faint">
+      <footer data-tour="player" className="flex h-9 shrink-0 items-center border-t border-line px-4 text-[11.5px] text-faint">
         Para escuchar y ver el mapa por sonido, tocá “Analizar mi música” en la Biblioteca y elegí tu carpeta. El audio no sale de tu compu.
       </footer>
     )
 
   return (
-    <footer className="flex h-16 shrink-0 items-center gap-4 border-t border-line bg-surface px-4">
+    <footer data-tour="player" className="flex h-16 shrink-0 items-center gap-4 border-t border-line bg-surface px-4">
       <div className="flex w-[280px] shrink-0 items-center gap-3">
         {track ? (
           <button onClick={() => select(track.id)} className="flex min-w-0 items-center gap-3 text-left">

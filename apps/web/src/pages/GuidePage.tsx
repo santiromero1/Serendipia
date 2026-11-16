@@ -28,7 +28,7 @@ export function GuidePage() {
         </p>
         <div className="mb-6 mt-4">
           <Btn variant="line" onClick={start}>
-            Ver el recorrido de nuevo
+            Ver el recorrido completo de nuevo
           </Btn>
         </div>
 

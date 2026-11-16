@@ -6,6 +6,7 @@ import { arrange, matching, nextTracks, type Suggestion } from '@/lib/similarity
 import { Btn, Chips, Cover, cx, fmtLong, PlayButton, range, Segmented } from '@/components/bits'
 import { SuggestionRow } from '@/components/DetailPanel'
 import { FromRekordbox } from '@/components/FromRekordbox'
+import { TourButton } from '@/components/Tour'
 import { ChapterOrder } from '@/components/ChapterOrder'
 import { matchesFilters, useFilters } from '@/stores/filters'
 import { useLibrary } from '@/stores/library'
@@ -249,7 +250,7 @@ function Explorer({ chapter, chapterTracks, inSet }: { chapter: Chapter | null; 
   }, [tab, kind, pool, chapterTracks])
 
   return (
-    <aside className="flex w-[304px] shrink-0 flex-col border-l border-line">
+    <aside data-tour="sets-explorer" className="flex w-[304px] shrink-0 flex-col border-l border-line">
       <div className="flex h-11 shrink-0 items-center justify-between px-4">
         <span className="text-[13px] font-medium text-fg">Explorador</span>
         <Segmented
@@ -337,7 +338,7 @@ export function SetsPage() {
   if (!set) {
     return (
       <div className="grid flex-1 place-items-center px-6">
-        <div className="max-w-[420px]">
+        <div data-tour="sets-empty" className="max-w-[420px]">
           <h1 className="text-[18px] font-medium text-fg">Armá un set por capítulos</h1>
           <p className="mt-2 text-[13px] text-soft">
             Cada capítulo es un bloque de temas con la misma vibra. Podés arrancar de cero o abrir una carpeta de rekordbox: cada playlist pasa a ser un capítulo. No fija el orden de la noche: te deja improvisar adentro de cada bloque y saltar al siguiente cuando la pista lo pide.
@@ -372,14 +373,17 @@ export function SetsPage() {
               {chapters.length} capítulos · {all.length} temas · {fmtLong(all.reduce((s, t) => s + (t.duration ?? 0), 0))}
             </div>
           </div>
-          <Segmented
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'chapters', label: 'Capítulos' },
-              { value: 'order', label: 'Orden' },
-            ]}
-          />
+          <span data-tour="sets-view">
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { value: 'chapters', label: 'Capítulos' },
+                { value: 'order', label: 'Orden' },
+              ]}
+            />
+          </span>
+          <TourButton screen="sets" />
           {sets.length > 1 && (
             <select
               aria-label="Cambiar de set"
@@ -405,6 +409,7 @@ export function SetsPage() {
             </Btn>
             <Btn
               variant="solid"
+              data-tour="sets-export"
               disabled={!all.length}
               title="XML para rekordbox: una carpeta con el set y una playlist por capítulo"
               onClick={() => download(`${set.name}.xml`, rekordboxXml(set.name, root, chapters), 'application/xml')}
@@ -426,7 +431,7 @@ export function SetsPage() {
         {view === 'order' ? (
           <ChapterOrder chapters={chapters} activeId={activeChapterId} inSet={inSet} />
         ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div data-tour="sets-chapters" className="min-h-0 flex-1 overflow-y-auto">
           {chapters.map((c) => (
             <ChapterRow key={c.chapter.id} chapter={c.chapter} tracks={c.tracks} active={c.chapter.id === activeChapterId} root={root} />
           ))}

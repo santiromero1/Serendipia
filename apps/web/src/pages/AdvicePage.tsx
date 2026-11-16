@@ -5,6 +5,7 @@ import { persist } from 'zustand/middleware'
 import { buildAdvice, type Advice } from '@/lib/advice'
 import { Btn, Chips, Cover, cx, PlayButton, Segmented } from '@/components/bits'
 import { useLibrary } from '@/stores/library'
+import { TourButton } from '@/components/Tour'
 import { useUI } from '@/stores/ui'
 
 /** Consejos que el DJ ya revisó y decidió dejar como están. */
@@ -102,6 +103,7 @@ export function AdvicePage() {
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="flex h-11 shrink-0 items-center gap-3 px-5">
         <h1 className="text-[14px] font-medium text-fg">Consejos</h1>
+        <TourButton screen="advice" />
         <span className="num text-[12px] text-faint">{pending.length} para revisar</span>
         <Segmented
           value={kind}
@@ -124,7 +126,7 @@ export function AdvicePage() {
         tus cajones son criterio tuyo. Serendipia no mueve archivos{root ? `; si cambiás algo en ${root}, volvé a escanear.` : '.'}
       </p>
 
-      <div className="min-h-0 flex-1 overflow-y-auto border-t border-line">
+      <div data-tour="advice-list" className="min-h-0 flex-1 overflow-y-auto border-t border-line">
         {!hasSound ? (
           <p className="px-5 py-10 text-[13px] text-faint">
             Los consejos necesitan el análisis de sonido. En la Biblioteca, tocá “Analizar mi música” y elegí tu carpeta.

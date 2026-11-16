@@ -138,7 +138,7 @@ export function FiltersPanel() {
   const visibleCrates = crates.filter(([, c]) => f.genres.includes(c.genre))
 
   return (
-    <aside className="flex h-full w-[248px] shrink-0 flex-col border-r border-line">
+    <aside data-tour="filters" className="flex h-full w-[248px] shrink-0 flex-col border-r border-line">
       <div className="flex h-11 shrink-0 items-center justify-between px-4">
         <span className="text-[13px] font-medium text-fg">
           Filtros {count > 0 && <span className="num ml-1 text-[11px] text-signal">{count}</span>}

@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
 import type { Track } from '@/lib/types'
 import { AnalyzeMusic } from '@/components/AnalyzeMusic'
 import { XmlDrop } from '@/components/ImportXml'
+import { TourButton } from '@/components/Tour'
 import { Cover, cx, fmtDuration, fmtLong, KeyChip, Meter, PlayButton } from '@/components/bits'
 import { matchesFilters, useFilters } from '@/stores/filters'
 import { useLibrary } from '@/stores/library'
@@ -62,18 +63,19 @@ export function LibraryPage() {
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="flex h-11 shrink-0 items-baseline gap-3 px-5 pt-3">
         <h1 className="text-[14px] font-medium text-fg">Biblioteca</h1>
+        <span className="self-center"><TourButton screen="library" /></span>
         <span className="num text-[12px] text-faint">
           {rows.length}
           {rows.length !== tracks.length && ` de ${tracks.length}`} temas · {fmtLong(total)}
         </span>
-        <span className="ml-auto flex items-center gap-3 self-center">
+        <span data-tour="library-actions" className="ml-auto flex items-center gap-3 self-center">
           {lib && !lib.rekordbox && noKey > 0 && <span className="text-[11.5px] text-faint">{noKey} temas sin tonalidad: cargá el XML de rekordbox.</span>}
           <AnalyzeMusic />
           <XmlDrop compact />
         </span>
       </header>
 
-      <div className="flex h-8 shrink-0 items-center gap-3 border-b border-line px-5 pl-[68px]">
+      <div data-tour="library-columns" className="flex h-8 shrink-0 items-center gap-3 border-b border-line px-5 pl-[68px]">
         {COLS.map((c) => (
           <button
             key={c.key}
@@ -87,7 +89,7 @@ export function LibraryPage() {
         <span className="w-6" />
       </div>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} data-tour="library-list" className="min-h-0 flex-1 overflow-y-auto">
         {rows.length === 0 ? (
           <div className="px-5 py-10 text-[13px] text-faint">
             Ningún tema cumple los filtros.{' '}

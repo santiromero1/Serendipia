@@ -4,6 +4,7 @@ import type { Cluster, Track } from '@/lib/types'
 import { keyColor } from '@/lib/harmony'
 import { neighbors } from '@/lib/similarity'
 import { AnalyzeMusic } from '@/components/AnalyzeMusic'
+import { TourButton } from '@/components/Tour'
 import { Btn, Chips, Cover, cx, Segmented, Select } from '@/components/bits'
 import { matchesFilters, useFilters } from '@/stores/filters'
 import { useLibrary } from '@/stores/library'
@@ -390,8 +391,9 @@ export function MapPage() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-3 px-5">
+      <header data-tour="map-controls" className="flex h-11 shrink-0 items-center gap-3 px-5">
         <h1 className="text-[14px] font-medium text-fg">Mapa</h1>
+        <TourButton screen="map" />
         <Segmented
           value={mode}
           onChange={setMode}
@@ -436,7 +438,7 @@ export function MapPage() {
         </span>
       </header>
 
-      <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
+      <div ref={wrapRef} data-tour="map-canvas" className="relative min-h-0 flex-1 overflow-hidden">
         <canvas
           ref={canvasRef}
           style={{ width: size.w, height: size.h }}

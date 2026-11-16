@@ -33,7 +33,7 @@ function Rail() {
   const count = useFilters(activeFilterCount)
   const canPlay = useLibrary((s) => s.canPlay)
   return (
-    <nav className="flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-line py-3" aria-label="Secciones">
+    <nav data-tour="nav" className="flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-line py-3" aria-label="Secciones">
       <div className="mb-3 grid h-7 w-7 place-items-center rounded-full border border-line-strong text-[11px] font-semibold text-fg" aria-hidden>
         S
       </div>
