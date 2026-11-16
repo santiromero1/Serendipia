@@ -1,27 +1,16 @@
 #!/bin/zsh
 # Crea ~/Applications/Serendipia.app: un lanzador que abre la app de escritorio desde este repo.
+# Se arma con osacompile para que sea una app real: macOS no abre bundles cuyo ejecutable es un script.
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 APP="$HOME/Applications/Serendipia.app"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$HERE/icon.icns" "$APP/Contents/Resources/icon.icns"
-cat > "$APP/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>CFBundleName</key><string>Serendipia</string>
-  <key>CFBundleIdentifier</key><string>local.serendipia.launcher</string>
-  <key>CFBundleExecutable</key><string>Serendipia</string>
-  <key>CFBundleIconFile</key><string>icon</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>0.1.0</string>
-</dict></plist>
-PLIST
-cat > "$APP/Contents/MacOS/Serendipia" <<RUN
-#!/bin/zsh
-export PATH="/opt/homebrew/bin:/usr/local/bin:\$PATH"
-cd "$HERE"
-exec "$HERE/../../node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" . >> "\$HOME/Library/Logs/Serendipia.log" 2>&1
-RUN
-chmod +x "$APP/Contents/MacOS/Serendipia"
+ELECTRON="$HERE/../../node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
+[ -x "$ELECTRON" ] || { echo "Falta Electron: corré npm install en la raíz del repo"; exit 1; }
+rm -rf "$APP"
+mkdir -p "$HOME/Applications"
+osacompile -o "$APP" -e "do shell script \"export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH; cd \" & quoted form of \"$HERE\" & \"; nohup \" & quoted form of \"$ELECTRON\" & \" . >> \$HOME/Library/Logs/Serendipia.log 2>&1 &\""
+cp "$HERE/icon.icns" "$APP/Contents/Resources/applet.icns"
+# el lanzador no queda en el Dock: la ventana es la de Electron
+/usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$APP/Contents/Info.plist" 2>/dev/null || true
+touch "$APP"
 echo "Listo: $APP"
