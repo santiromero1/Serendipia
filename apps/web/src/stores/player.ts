@@ -1,4 +1,7 @@
 import { create } from 'zustand'
+import { localFiles } from '@/lib/sound/analyze'
+import { playableUrl } from '@/lib/sound/decode'
+import { useLibrary } from './library'
 
 const audio = typeof Audio !== 'undefined' ? new Audio() : null
 if (audio) audio.preload = 'metadata'
@@ -44,6 +47,16 @@ export const usePlayer = create<PlayerState>((set, get) => {
         return
       }
       set({ trackId: id, label: label ?? null, time: 0, duration: 0, error: null })
+      const file = useLibrary.getState().hasServer ? undefined : localFiles.get(id)
+      if (file) {
+        // archivo elegido por el DJ en esta sesión: se toca directo desde su disco
+        playableUrl(file).then((url) => {
+          if (get().trackId !== id) return
+          audio.src = url
+          audio.play().catch(() => set({ playing: false }))
+        })
+        return
+      }
       audio.src = id.startsWith('inbox:') ? `/api/inbox/audio?t=${id.slice(6)}` : `/audio/${id}`
       if (get().fastPreview) {
         audio.addEventListener(

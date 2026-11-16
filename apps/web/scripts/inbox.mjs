@@ -6,6 +6,7 @@
  * confirma tema por tema, mueve y renombra el archivo. Nunca borra: descartar manda a la Papelera.
  */
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
@@ -161,6 +162,21 @@ function suggest(info, lib) {
   // mismo artista ya en la biblioteca: empuja hacia donde está el resto
   const artist = norm(info.artist)
   if (artist) lib.tracks.forEach((t, i) => norm(t.artist) === artist && votes.set(lib.dirOf[i], (votes.get(lib.dirOf[i]) ?? 0) + 0.35))
+  // género del tag: si en la biblioteca ese género vive sobre todo en una carpeta, esa carpeta suma
+  const tag = norm(info.tagGenre)
+  if (tag && !/^(electro|dance|music|electronica|electronic)$/.test(tag)) {
+    const roots = new Map()
+    for (const t of lib.tracks) if (norm(t.tagGenre) === tag) roots.set(t.genre, (roots.get(t.genre) ?? 0) + 1)
+    const [root, n] = [...roots].sort((a, b) => b[1] - a[1])[0] ?? []
+    const all = [...roots.values()].reduce((a, b) => a + b, 0)
+    if (root && n >= 5 && n / all >= 0.6) {
+      for (const [dir, w] of votes) if (dir.split('/')[0] === root) votes.set(dir, w * 1.5)
+      if (![...votes.keys()].some((dir) => dir.split('/')[0] === root)) {
+        const biggest = lib.places.filter((p) => p.genre === root).sort((a, b) => b.n - a.n)[0]
+        if (biggest) votes.set(biggest.dir, 0.8)
+      }
+    }
+  }
   const total = [...votes.values()].reduce((a, b) => a + b, 0) || 1
   return {
     options: [...votes].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([dir, w]) => ({ dir, share: Math.round((w / total) * 100) })),
@@ -217,7 +233,9 @@ export async function moveToLibrary(token, dir, name) {
     await fsp.copyFile(file, dest, fs.constants.COPYFILE_EXCL)
     await fsp.unlink(file)
   }
-  return { rel: `${dir}/${safe}` }
+  const rel = `${dir}/${safe}`.normalize('NFC')
+  // mismo id que le va a dar el escáner: permite sumarlo a un set antes de reescanear
+  return { rel, id: createHash('sha1').update(rel).digest('hex').slice(0, 12) }
 }
 
 /** Descartar: a la Papelera, nunca borrado definitivo. */

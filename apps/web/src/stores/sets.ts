@@ -44,6 +44,8 @@ interface SetsState {
   dismiss: (trackId: string) => void
   /** cambia marcas de uno o varios temas en el set activo; un valor undefined borra esa marca */
   setMarks: (patch: Record<string, Partial<Mark>>) => void
+  /** suma un tema al capítulo "Candidatos" del set activo, con su marca */
+  addCandidate: (trackId: string, mark?: Partial<Mark>) => void
 }
 
 export const useSets = create<SetsState>()(
@@ -132,6 +134,17 @@ export const useSets = create<SetsState>()(
           })
         },
 
+        addCandidate(trackId, mark) {
+          if (!get().activeSetId) get().createSet('Set nuevo', [])
+          const s = get().sets.find((x) => x.id === get().activeSetId)
+          const existing = s?.chapters.find((c) => c.name === 'Candidatos')
+          const previous = get().activeChapterId
+          if (existing) get().addTrack(trackId, existing.id)
+          else get().addChapter('Candidatos', [trackId])
+          if (previous) set({ activeChapterId: previous })
+          if (mark) get().setMarks({ [trackId]: mark })
+        },
+
         dismiss(trackId) {
           const id = get().activeSetId
           if (!id) return
@@ -144,3 +157,27 @@ export const useSets = create<SetsState>()(
 )
 
 export const useActiveSet = () => useSets((s) => s.sets.find((x) => x.id === s.activeSetId) ?? null)
+
+/** Deshacer: se guarda el estado anterior de los sets ante cada cambio (los cambios seguidos, como tipear, cuentan como uno). */
+type Snapshot = Pick<SetsState, 'sets' | 'activeSetId' | 'activeChapterId'>
+const history: Snapshot[] = []
+let undoing = false
+let lastPush = 0
+useSets.subscribe((s, prev) => {
+  if (undoing || s.sets === prev.sets) return
+  const now = Date.now()
+  if (now - lastPush > 600) {
+    history.push({ sets: prev.sets, activeSetId: prev.activeSetId, activeChapterId: prev.activeChapterId })
+    if (history.length > 80) history.shift()
+  }
+  lastPush = now
+})
+export function undoSets(): boolean {
+  const snap = history.pop()
+  if (!snap) return false
+  undoing = true
+  useSets.setState(snap)
+  undoing = false
+  lastPush = 0
+  return true
+}

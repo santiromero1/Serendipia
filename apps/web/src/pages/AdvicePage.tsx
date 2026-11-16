@@ -127,7 +127,7 @@ export function AdvicePage() {
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-line">
         {!hasSound ? (
           <p className="px-5 py-10 text-[13px] text-faint">
-            Los consejos necesitan el análisis de sonido, que hoy solo existe en la versión local. Corré <span className="num">npm run scan</span> en la compu donde está tu música.
+            Los consejos necesitan el análisis de sonido. En la Biblioteca, tocá “Analizar mi música” y elegí tu carpeta.
           </p>
         ) : list.length === 0 ? (
           <p className="px-5 py-10 text-[13px] text-faint">

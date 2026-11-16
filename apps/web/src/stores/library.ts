@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { openDB } from 'idb'
+import { db } from '@/lib/db'
+import { analyzeLibrary, type Progress } from '@/lib/sound/analyze'
 import type { Feature, Library, Track } from '@/lib/types'
 import { mergeAnalysis, parseRekordboxXml } from '@/lib/rekordbox'
 import { computeLayout } from '@/lib/layout'
@@ -17,12 +18,6 @@ function readOverrides(): Overrides {
 }
 
 /** La biblioteca importada vive en IndexedDB de este navegador; nunca se sube a ningún servidor. */
-const db = () =>
-  openDB('serendipia', 2, {
-    upgrade(d) {
-      if (!d.objectStoreNames.contains('library')) d.createObjectStore('library')
-    },
-  })
 const saveLibrary = async (lib: Library | null) => {
   try {
     const d = await db()
@@ -63,6 +58,12 @@ interface LibraryState {
   lib: Library | null
   /** el audio se puede escuchar solo cuando la app corre en la compu donde está la música */
   canPlay: boolean
+  /** la app corre junto al escáner local, que sirve datos y audio */
+  hasServer: boolean
+  /** análisis de sonido en el navegador, en curso o terminado */
+  analysis: (Progress & { running: boolean; error?: string }) | null
+  analyzeFolder: (files: File[]) => Promise<void>
+  cancelAnalysis: () => void
   /** de dónde vino la biblioteca */
   source: 'local' | 'xml' | null
   /** temas con las correcciones manuales ya aplicadas */
@@ -76,6 +77,8 @@ interface LibraryState {
   forget: () => Promise<void>
   setFeature: (id: string, feature: Feature, value: number | null) => void
 }
+
+let cancel = false
 
 export const useLibrary = create<LibraryState>((set, get) => {
   const apply = (lib: Library, source: 'local' | 'xml', canPlay: boolean) =>
@@ -91,6 +94,8 @@ export const useLibrary = create<LibraryState>((set, get) => {
     status: 'loading',
     lib: null,
     canPlay: false,
+    hasServer: false,
+    analysis: null,
     source: null,
     tracks: [],
     byId: new Map(),
@@ -100,6 +105,7 @@ export const useLibrary = create<LibraryState>((set, get) => {
     async load() {
       const [stored, local] = await Promise.all([readLibrary(), fetchLocal()])
       const canPlay = !!local
+      set({ hasServer: !!local })
       if (stored) apply(local ? mergeAnalysis(stored, local) : stored, 'xml', canPlay)
       else if (local) apply(local, 'local', canPlay)
       else return set({ status: 'empty' })
@@ -131,6 +137,25 @@ export const useLibrary = create<LibraryState>((set, get) => {
       await saveLibrary(merged)
       apply(merged, get().source ?? 'xml', get().canPlay)
       return `Análisis sumado a ${hits} de ${merged.tracks.length} temas.`
+    },
+
+    async analyzeFolder(files) {
+      const lib = get().lib
+      if (!lib || get().analysis?.running) return
+      cancel = false
+      const empty: Progress = { phase: 'modelo', done: 0, total: 0, current: '', matched: 0, failed: 0 }
+      set({ analysis: { ...empty, running: true } })
+      try {
+        const next = await analyzeLibrary(lib, files, (p) => set({ analysis: { ...p, running: true } }), () => cancel)
+        await saveLibrary(next)
+        apply(next, get().source ?? 'xml', true)
+        set((s) => ({ analysis: s.analysis && { ...s.analysis, running: false } }))
+      } catch (e) {
+        set((s) => ({ analysis: { ...(s.analysis ?? empty), running: false, error: e instanceof Error ? e.message : 'No se pudo analizar' } }))
+      }
+    },
+    cancelAnalysis() {
+      cancel = true
     },
 
     async forget() {

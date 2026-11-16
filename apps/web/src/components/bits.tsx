@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { Pause, Play } from 'lucide-react'
 import type { Track } from '@/lib/types'
 import { keyColor } from '@/lib/harmony'
+import { localFiles } from '@/lib/sound/analyze'
 import { useLibrary } from '@/stores/library'
 import { usePlayer } from '@/stores/player'
 
@@ -96,7 +97,8 @@ export function PlayButton({ id, size = 26, className, label }: { id: string; si
   const active = usePlayer((s) => s.trackId === id)
   const playing = usePlayer((s) => s.playing && s.trackId === id)
   const play = usePlayer((s) => s.play)
-  const canPlay = useLibrary((s) => s.canPlay)
+  // con servidor local se escucha todo; en la web, solo los temas cuyo archivo eligió el DJ
+  const canPlay = useLibrary((s) => s.hasServer || (s.canPlay && localFiles.has(id)))
   if (!canPlay) return null
   return (
     <button

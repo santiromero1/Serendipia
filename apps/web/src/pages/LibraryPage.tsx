@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
 import type { Track } from '@/lib/types'
+import { AnalyzeMusic } from '@/components/AnalyzeMusic'
 import { XmlDrop } from '@/components/ImportXml'
 import { Cover, cx, fmtDuration, fmtLong, KeyChip, Meter, PlayButton } from '@/components/bits'
 import { matchesFilters, useFilters } from '@/stores/filters'
@@ -67,6 +68,7 @@ export function LibraryPage() {
         </span>
         <span className="ml-auto flex items-center gap-3 self-center">
           {lib && !lib.rekordbox && noKey > 0 && <span className="text-[11.5px] text-faint">{noKey} temas sin tonalidad: cargá el XML de rekordbox.</span>}
+          <AnalyzeMusic />
           <XmlDrop compact />
         </span>
       </header>

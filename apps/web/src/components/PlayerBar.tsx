@@ -62,7 +62,7 @@ export function PlayerBar() {
   if (!canPlay)
     return (
       <footer className="flex h-9 shrink-0 items-center border-t border-line px-4 text-[11.5px] text-faint">
-        Para escuchar, abrí Serendipia en la compu donde está tu música (npm run dev). Acá ves la biblioteca y armás los sets.
+        Para escuchar y ver el mapa por sonido, tocá “Analizar mi música” en la Biblioteca y elegí tu carpeta. El audio no sale de tu compu.
       </footer>
     )
 

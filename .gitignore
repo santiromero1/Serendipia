@@ -26,3 +26,6 @@ npm-debug.log*
 apps/web/.library-cache/
 .vercel
 .env*
+
+# modelo de sonido: se baja en el build
+apps/web/public/models/

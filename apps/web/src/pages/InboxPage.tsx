@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, RefreshCw, Trash2 } from 'lucide-react'
 import { Btn, cx, fmtDuration, PlayButton } from '@/components/bits'
 import { useLibrary } from '@/stores/library'
+import { useActiveSet, useSets } from '@/stores/sets'
 import { useUI } from '@/stores/ui'
 
 interface Place {
@@ -45,6 +46,9 @@ function Card({ row, places, active, onFocus, onDone }: { row: Row; places: Plac
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [forSet, setForSet] = useState<'' | 'candidate' | 'must' | 'open'>('')
+  const activeSet = useActiveSet()
+  const addCandidate = useSets((s) => s.addCandidate)
   const ref = useRef<HTMLLIElement>(null)
 
   useEffect(() => {
@@ -62,13 +66,14 @@ function Card({ row, places, active, onFocus, onDone }: { row: Row; places: Plac
     setBusy(true)
     setError(null)
     try {
-      await post('/api/inbox/move', { token: item.token, dir, name })
-      onDone(`Movido a ${shortDir(dir)}`)
+      const moved = await post('/api/inbox/move', { token: item.token, dir, name })
+      if (forSet) addCandidate(moved.id, forSet === 'must' ? { must: true } : forSet === 'open' ? { role: 'open' } : undefined)
+      onDone(`Movido a ${shortDir(dir)}${forSet ? ' · candidato del set' : ''}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo mover')
     }
     setBusy(false)
-  }, [item, dir, name, busy, onDone])
+  }, [item, dir, name, busy, onDone, forSet, addCandidate])
 
   const discard = async () => {
     if (!item || !confirm(`¿Mandar “${item.name}” a la Papelera?`)) return
@@ -191,6 +196,18 @@ function Card({ row, places, active, onFocus, onDone }: { row: Row; places: Plac
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <select
+            aria-label="Marcar para el set activo"
+            title={`Al mover, lo suma al capítulo Candidatos de ${activeSet ? `“${activeSet.name}”` : 'un set nuevo'}`}
+            value={forSet}
+            onChange={(e) => setForSet(e.target.value as typeof forSet)}
+            className={cx('h-7 rounded-[5px] border bg-transparent px-1.5 text-[12px] outline-none', forSet ? 'border-fg text-fg' : 'border-line text-faint hover:text-soft')}
+          >
+            <option value="" className="bg-surface">Sin set</option>
+            <option value="candidate" className="bg-surface">Candidato</option>
+            <option value="must" className="bg-surface">Sí o sí</option>
+            <option value="open" className="bg-surface">Para abrir</option>
+          </select>
           <Btn variant="solid" disabled={!dir || busy || !name.trim()} onClick={move} title="Mueve el archivo a ese cajón con este nombre">
             {busy ? 'Moviendo' : 'Mover'}
           </Btn>

@@ -9,6 +9,7 @@
 - Sets por capítulos, vista Orden con alertas de tonalidad, abrir desde rekordbox y exportar a rekordbox.
 - Marcas por tema dentro de cada set (abre, peak, cierra, sí o sí, extra, junto a, nota), Ordenar que las respeta y recorte por duración.
 - Consejos de categorización.
+- Análisis de sonido en el navegador: el DJ elige su carpeta, el audio no se sube, y obtiene galaxia, consejos y escucha (AIFF incluido). Deshacer en Sets. Candidatos a un set desde la Bandeja.
 - Bandeja de descargas (local): sugiere hasta tres cajones por tema, propone el nombre, avisa duplicados y mueve o manda a la Papelera, de a un tema y con confirmación.
 
 ## Decisiones tomadas
@@ -31,10 +32,10 @@ Para el autor, en la versión local.
 
 Objetivo: un amigo entra a la URL, carga su música y tiene galaxia, sets y consejos sin instalar nada.
 
-1. **Análisis en el navegador.** El mismo modelo de sonido (ONNX, 18 MB) corre en el navegador con onnxruntime-web. El DJ elige su carpeta de música y el audio nunca sale de su compu; solo se guardan las huellas. Hay que escribir un lector de AIFF, porque Chrome no lo decodifica.
+1. **Análisis en el navegador.** Hecho. El modelo (ONNX, 18 MB) se baja en el build y corre con onnxruntime-web en un worker; las huellas quedan en IndexedDB. Usa 16 parches por tema en vez de 40: la huella coincide con la del escáner local (coseno medio 0,95) y analiza unos 2 temas por segundo. Falta: energía, bailabilidad y brillo en la web, tapas, y probar con la biblioteca de otra persona.
 2. **Cuentas y sincronización.** Supabase: login, y guardar sets, marcas y huellas (no audio) para que estén en cualquier dispositivo.
 3. **Primer uso guiado.** Recorrido del producto dentro de la app y una página de cómo se usa: exportar el XML, elegir la carpeta, leer la galaxia, armar el primer set.
-4. **Escucha en la web.** Con la carpeta elegida, el navegador puede reproducir los archivos locales sin subirlos.
+4. **Escucha en la web.** Hecho para los temas de la carpeta elegida en esa sesión; al recargar hay que volver a elegirla.
 
 Riesgo a resolver antes de cobrar: **la licencia del modelo de audio**. Los modelos de Essentia se publican para uso no comercial; para vender hace falta pedir licencia comercial a la universidad (MTG-UPF) o cambiar de modelo. Verificarlo es el primer paso de esta etapa.
 

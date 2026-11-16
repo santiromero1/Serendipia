@@ -3,6 +3,7 @@ import * as d3 from 'd3'
 import type { Cluster, Track } from '@/lib/types'
 import { keyColor } from '@/lib/harmony'
 import { neighbors } from '@/lib/similarity'
+import { AnalyzeMusic } from '@/components/AnalyzeMusic'
 import { Btn, Chips, Cover, cx, Segmented, Select } from '@/components/bits'
 import { matchesFilters, useFilters } from '@/stores/filters'
 import { useLibrary } from '@/stores/library'
@@ -42,6 +43,7 @@ function axisValue(t: Track, a: Axis): number | null {
 export function MapPage() {
   const tracks = useLibrary((s) => s.tracks)
   const lib = useLibrary((s) => s.lib)
+  const hasServer = useLibrary((s) => s.hasServer)
   const filters = useFilters()
   const toggleFilter = useFilters((s) => s.toggle)
   const selectedId = useUI((s) => s.selectedId)
@@ -463,6 +465,16 @@ export function MapPage() {
           }}
         />
 
+        {!hasGalaxy && !hasServer && (
+          <div className="absolute left-1/2 top-6 z-10 w-[min(520px,90%)] -translate-x-1/2 rounded-[8px] border border-line-strong bg-surface p-4">
+            <p className="text-[13px] font-medium text-fg">Ubicá tus temas por cómo suenan</p>
+            <p className="mb-3 mt-1 text-[12px] leading-relaxed text-faint">
+              Elegí la carpeta donde está tu música. Serendipia escucha cada tema en este navegador y arma el mapa: los parecidos quedan cerca. El audio no se sube a
+              ningún lado. La primera vez tarda unos segundos por tema.
+            </p>
+            <AnalyzeMusic big />
+          </div>
+        )}
         {mode === 'near' && hasGalaxy && (
           <p className="label pointer-events-none absolute bottom-3 left-5 normal-case tracking-normal">
             Centro: el núcleo de tu sonido · Borde: temas que no se parecen al resto · Clic en un grupo lo selecciona

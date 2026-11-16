@@ -14,6 +14,7 @@ import { SetsPage } from '@/pages/SetsPage'
 import { activeFilterCount, useFilters } from '@/stores/filters'
 import { useLibrary } from '@/stores/library'
 import { usePlayer } from '@/stores/player'
+import { undoSets } from '@/stores/sets'
 import { useUI } from '@/stores/ui'
 
 const NAV = [
@@ -80,6 +81,10 @@ export default function App() {
         usePlayer.getState().toggle()
       }
       if (e.key === 'Escape') useUI.getState().select(null)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undoSets()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

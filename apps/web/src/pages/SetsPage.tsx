@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
-import { ArrowDownUp, Download, Plus, Trash2, X } from 'lucide-react'
+import { ArrowDownUp, Download, Plus, Trash2, Undo2, X } from 'lucide-react'
 import type { Track } from '@/lib/types'
 import { keyRule } from '@/lib/harmony'
 import { arrange, matching, nextTracks, type Suggestion } from '@/lib/similarity'
@@ -9,7 +9,7 @@ import { FromRekordbox } from '@/components/FromRekordbox'
 import { ChapterOrder } from '@/components/ChapterOrder'
 import { matchesFilters, useFilters } from '@/stores/filters'
 import { useLibrary } from '@/stores/library'
-import { CHAPTER_PRESETS, useActiveSet, useSets, type Chapter } from '@/stores/sets'
+import { CHAPTER_PRESETS, undoSets, useActiveSet, useSets, type Chapter } from '@/stores/sets'
 import { useUI } from '@/stores/ui'
 
 function download(filename: string, text: string, type: string) {
@@ -397,6 +397,9 @@ export function SetsPage() {
           <div className="ml-auto flex min-w-0 items-center gap-1.5">
             <EnergyCurve chapters={chapters} />
             <FromRekordbox />
+            <Btn aria-label="Deshacer" title="Deshacer el último cambio (Cmd + Z)" onClick={() => undoSets()}>
+              <Undo2 size={13} />
+            </Btn>
             <Btn variant="line" onClick={() => createSet('Set nuevo')}>
               <Plus size={12} /> Set
             </Btn>
