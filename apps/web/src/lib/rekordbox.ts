@@ -157,8 +157,8 @@ export async function parseRekordboxXml(text: string): Promise<ImportResult> {
       format: file.split('.').pop()?.toLowerCase() ?? '',
       cover: false,
       added,
-      energy: stars ? stars * 2 : null,
-      energySource: stars ? 'estrellas' : null,
+      energy: null,
+      energySource: null,
       dance: null,
       bright: null,
     })
@@ -211,8 +211,8 @@ export function mergeAnalysis(base: Library, analysis: Library): Library {
     hits++
     return {
       ...t,
-      energy: t.stars ? t.energy : a.energy,
-      energySource: t.stars ? t.energySource : a.energy != null ? ('audio' as const) : null,
+      energy: a.energy,
+      energySource: a.energy != null ? ('audio' as const) : null,
       dance: a.dance,
       bright: a.bright,
       x: a.x,

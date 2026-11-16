@@ -7,7 +7,7 @@ import { Btn, Chips, Cover, cx, Segmented, Select } from '@/components/bits'
 import { matchesFilters, useFilters } from '@/stores/filters'
 import { useLibrary } from '@/stores/library'
 import { usePlayer } from '@/stores/player'
-import { useSets } from '@/stores/sets'
+import { useActiveSet, useSets } from '@/stores/sets'
 import { useUI } from '@/stores/ui'
 
 type Axis = 'energy' | 'dance' | 'bright' | 'bpm'
@@ -62,6 +62,14 @@ export function MapPage() {
   const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const [size, setSize] = useState({ w: 800, h: 600 })
   const [made, setMade] = useState<string | null>(null)
+  const [showSet, setShowSet] = useState(false)
+  const activeSet = useActiveSet()
+  /** recorrido del set activo: sus temas en orden, capítulo por capítulo, sin los extras */
+  const route = useMemo(
+    () => (activeSet?.chapters ?? []).flatMap((c) => c.trackIds.filter((id) => !activeSet?.marks?.[id]?.extra)),
+    [activeSet],
+  )
+  const routeOn = showSet && route.length > 1
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -138,8 +146,9 @@ export function MapPage() {
     const pickedSet = new Set(picked.ids)
     const nearSet = new Set(near)
     const galaxy = mode === 'near' && hasGalaxy
-    const focus = selectedId != null || hoverHub != null
-    const inFocus = (t: Track) => t.id === selectedId || nearSet.has(t.id) || (hoverHub != null && t.cluster === hoverHub)
+    const routeSet = new Set(routeOn ? route : [])
+    const focus = selectedId != null || hoverHub != null || routeOn
+    const inFocus = (t: Track) => t.id === selectedId || nearSet.has(t.id) || (hoverHub != null && t.cluster === hoverHub) || routeSet.has(t.id)
 
     if (galaxy) {
       // red tenue: rayos al centro de cada grupo y uniones entre vecinos mutuos
@@ -184,6 +193,25 @@ export function MapPage() {
         ctx.lineTo(x, y)
         ctx.stroke()
       }
+    }
+
+    if (routeOn) {
+      // el set como camino: de dónde sale, por dónde pasa y cuánto salta entre zonas
+      const pts = route.map((id) => pos.current.get(id)).filter((p): p is [number, number] => !!p).map(toScreen)
+      ctx.strokeStyle = 'oklch(0.87 0.045 225)'
+      ctx.lineWidth = 1.4
+      ctx.lineJoin = 'round'
+      ctx.globalAlpha = 0.85
+      ctx.beginPath()
+      pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
+      ctx.stroke()
+      ctx.globalAlpha = 1
+      ctx.fillStyle = 'oklch(0.87 0.045 225)'
+      ctx.font = '500 10px Geist Mono, ui-monospace, monospace'
+      ctx.textAlign = 'left'
+      pts.forEach(([x, y], i) => {
+        if (i === 0 || i === pts.length - 1 || k > 2.2) ctx.fillText(String(i + 1), x + 6, y - 6)
+      })
     }
 
     // primero los apagados, después los activos, para que no los tapen
@@ -236,7 +264,7 @@ export function MapPage() {
       }
       ctx.globalAlpha = 1
     }
-  }, [tracks, visible, size, selectedId, selected, near, picked, colorOf, toScreen, mode, hasGalaxy, clusters, hoverHub])
+  }, [tracks, visible, size, selectedId, selected, near, picked, colorOf, toScreen, mode, hasGalaxy, clusters, hoverHub, routeOn, route])
 
   // tamaño del lienzo
   useEffect(() => {
@@ -388,6 +416,16 @@ export function MapPage() {
             { value: 'key', label: 'Tonalidad' },
           ]}
         />
+        {activeSet && route.length > 1 && (
+          <button
+            aria-pressed={showSet}
+            onClick={() => setShowSet(!showSet)}
+            title="Dibuja el recorrido del set activo sobre el mapa"
+            className={cx('h-7 max-w-[220px] shrink-0 truncate rounded-[5px] border px-2.5 text-[12px] transition-colors', showSet ? 'border-signal text-signal' : 'border-line text-soft hover:border-line-strong hover:text-fg')}
+          >
+            Recorrido: {activeSet.name}
+          </button>
+        )}
         <span className="ml-auto truncate text-[11.5px] text-faint">
           {mode === 'near' && hasGalaxy && report
             ? `Ubicados por sonido y tags, sin tus carpetas: ${report.genero.conTags ?? report.genero.huella}% de los vecinos de cada tema está en tu misma carpeta.`

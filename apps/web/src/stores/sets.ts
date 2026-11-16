@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { Mark, Marks } from '@/lib/types'
 
 export interface Chapter {
   id: string
@@ -11,6 +12,8 @@ export interface DJSet {
   id: string
   name: string
   chapters: Chapter[]
+  /** marcas por tema, propias de este set */
+  marks?: Marks
 }
 
 export const CHAPTER_PRESETS = ['Warm-up', 'Build-up', 'Peak', 'Cool-down', 'Closing']
@@ -39,6 +42,8 @@ interface SetsState {
   addTrack: (trackId: string, chapterId?: string, index?: number) => void
   removeTrack: (chapterId: string, trackId: string) => void
   dismiss: (trackId: string) => void
+  /** cambia marcas de uno o varios temas en el set activo; un valor undefined borra esa marca */
+  setMarks: (patch: Record<string, Partial<Mark>>) => void
 }
 
 export const useSets = create<SetsState>()(
@@ -113,6 +118,19 @@ export const useSets = create<SetsState>()(
         },
         removeTrack: (chapterId, trackId) =>
           patchChapter(chapterId, (c) => ({ ...c, trackIds: c.trackIds.filter((t) => t !== trackId) })),
+
+        setMarks(patch) {
+          patchActive((s) => {
+            const marks: Marks = { ...s.marks }
+            for (const [id, p] of Object.entries(patch)) {
+              const next: Mark = { ...marks[id], ...p }
+              for (const k of Object.keys(next) as (keyof Mark)[]) if (next[k] === undefined || next[k] === false || next[k] === '') delete next[k]
+              if (Object.keys(next).length) marks[id] = next
+              else delete marks[id]
+            }
+            return { ...s, marks }
+          })
+        },
 
         dismiss(trackId) {
           const id = get().activeSetId

@@ -83,6 +83,11 @@ export function Chips({ track }: { track: Track }) {
       <span className="num text-faint" title="Energía · Bailabilidad">
         E {fmt1(track.energy)} · Ba {fmt1(track.dance)}
       </span>
+      {track.stars != null && (
+        <span className="text-faint" title="Estrellas de rekordbox">
+          {'★'.repeat(track.stars)}
+        </span>
+      )}
     </span>
   )
 }

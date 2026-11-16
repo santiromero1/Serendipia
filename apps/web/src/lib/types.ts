@@ -73,6 +73,19 @@ export interface Library {
   playlists: { name: string; tracks: string[] }[]
 }
 
+/** Lo que el DJ dice de un tema dentro de un set en particular. No es una propiedad del tema. */
+export interface Mark {
+  role?: 'open' | 'peak' | 'close'
+  /** tiene que estar sí o sí: no se recorta */
+  must?: boolean
+  /** queda de reserva, al final */
+  extra?: boolean
+  /** id del tema con el que va pegado */
+  with?: string
+  note?: string
+}
+export type Marks = Record<string, Mark>
+
 export type Feature = 'energy' | 'dance' | 'bright'
 
 export const FEATURE_LABEL: Record<Feature, string> = {

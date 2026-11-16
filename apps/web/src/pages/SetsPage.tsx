@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { ArrowDownUp, Download, Plus, Trash2, X } from 'lucide-react'
 import type { Track } from '@/lib/types'
 import { keyRule } from '@/lib/harmony'
-import { magicSort, matching, nextTracks, type Suggestion } from '@/lib/similarity'
+import { arrange, matching, nextTracks, type Suggestion } from '@/lib/similarity'
 import { Btn, Chips, Cover, cx, fmtLong, PlayButton, range, Segmented } from '@/components/bits'
 import { SuggestionRow } from '@/components/DetailPanel'
 import { FromRekordbox } from '@/components/FromRekordbox'
@@ -95,6 +95,7 @@ function ChapterRow({ chapter, tracks, active, root }: { chapter: Chapter; track
   const { selectChapter, renameChapter, deleteChapter, setChapterTracks, addTrack, removeTrack } = useSets()
   const select = useUI((s) => s.select)
   const [over, setOver] = useState<number | null>(null)
+  const marks = useActiveSet()?.marks ?? {}
   const dur = tracks.reduce((s, t) => s + (t.duration ?? 0), 0)
 
   const drop = (e: React.DragEvent, index?: number) => {
@@ -129,7 +130,7 @@ function ChapterRow({ chapter, tracks, active, root }: { chapter: Chapter; track
           <Btn
             disabled={tracks.length < 3}
             title="Ordenar de menos a más energía encadenando tonalidades compatibles"
-            onClick={() => setChapterTracks(chapter.id, magicSort(tracks).map((t) => t.id))}
+            onClick={() => setChapterTracks(chapter.id, arrange(tracks, marks).map((t) => t.id))}
           >
             <ArrowDownUp size={12} /> Ordenar
           </Btn>

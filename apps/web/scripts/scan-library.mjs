@@ -520,8 +520,9 @@ async function main() {
   const dance = rank10(mix([zPulse, 0.4], [zFlux, 0.3], [zLow, 0.15], [zSteady, 0.15]))
   const bright = rank10(mix([zCent, 0.7], [zHigh, 0.3]))
   tracks.forEach((t, i) => {
-    t.energy = t.stars ? t.stars * 2 : energy[i]
-    t.energySource = t.stars ? 'estrellas' : energy[i] != null ? 'audio' : null
+    // las estrellas de rekordbox no se usan como energía: el DJ las pone relativas a cada set
+    t.energy = energy[i]
+    t.energySource = energy[i] != null ? 'audio' : null
     t.dance = dance[i]
     t.bright = bright[i]
     delete t._raw

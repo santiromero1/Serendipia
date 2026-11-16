@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, GripVertical, Plus, X } from 'lucide-react'
-import type { Track } from '@/lib/types'
+import { AlertTriangle, ArrowDown, ArrowDownUp, ArrowUp, GripVertical, Plus, X } from 'lucide-react'
+import type { Mark, Marks, Track } from '@/lib/types'
 import { keyRule, type KeyRule } from '@/lib/harmony'
-import { nextTracks } from '@/lib/similarity'
+import { arrange, nextTracks, played, trimToMinutes } from '@/lib/similarity'
 import { useLibrary } from '@/stores/library'
-import { useSets, type Chapter } from '@/stores/sets'
+import { useActiveSet, useSets, type Chapter } from '@/stores/sets'
 import { useUI } from '@/stores/ui'
 import { Btn, Cover, cx, fmt1, fmtDuration, fmtLong, KeyChip, PlayButton, Segmented } from './bits'
 
@@ -64,7 +64,85 @@ function fits(t: Track, order: Track[]) {
   return out.sort((x, y) => y.score - x.score)
 }
 
-function Inspector({ track, order, inSet, onMove, onInsert }: { track: Track; order: Track[]; inSet: Set<string>; onMove: (index: number) => void; onInsert: (id: string, index: number) => void }) {
+const ROLE_LABEL = { open: 'abre', peak: 'peak', close: 'cierra' } as const
+
+/** Etiquetas chicas con lo que el DJ marcó para este tema en este set. */
+function MarkBadges({ mark, byId }: { mark: Mark | undefined; byId: Map<string, Track> }) {
+  if (!mark) return null
+  const items = [mark.role && ROLE_LABEL[mark.role], mark.must && 'sí o sí', mark.extra && 'extra', mark.with && byId.get(mark.with) && `con ${byId.get(mark.with)!.title}`].filter(Boolean) as string[]
+  if (!items.length && !mark.note) return null
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      {items.map((x) => (
+        <span key={x} className="max-w-[130px] shrink-0 truncate rounded-[3px] border border-line-strong px-1 text-[10px] leading-[15px] text-soft">
+          {x}
+        </span>
+      ))}
+      {mark.note && <span className="truncate text-[10.5px] italic text-faint">{mark.note}</span>}
+    </span>
+  )
+}
+
+function MarkEditor({ track, order, marks }: { track: Track; order: Track[]; marks: Marks }) {
+  const setMarks = useSets((s) => s.setMarks)
+  const mark = marks[track.id] ?? {}
+  const Toggle = ({ on, label, onClick, title }: { on: boolean; label: string; onClick: () => void; title: string }) => (
+    <button
+      aria-pressed={on}
+      title={title}
+      onClick={onClick}
+      className={cx('h-6 rounded-[4px] border px-2 text-[11.5px] transition-colors', on ? 'border-fg bg-fg text-bg' : 'border-line text-soft hover:border-line-strong hover:text-fg')}
+    >
+      {label}
+    </button>
+  )
+  /** Abre y cierra son únicos por playlist: marcar uno desmarca al que lo tenía. */
+  const setRole = (role: 'open' | 'peak' | 'close') => {
+    const patch: Record<string, Partial<Mark>> = { [track.id]: { role: mark.role === role ? undefined : role, extra: undefined } }
+    if (role !== 'peak') for (const t of order) if (t.id !== track.id && marks[t.id]?.role === role) patch[t.id] = { role: undefined }
+    setMarks(patch)
+  }
+  return (
+    <div className="shrink-0 space-y-2.5 border-b border-line p-4">
+      <div className="label">En este set</div>
+      <div className="flex flex-wrap gap-1">
+        <Toggle on={mark.role === 'open'} label="Abre" title="Va primero en esta playlist" onClick={() => setRole('open')} />
+        <Toggle on={mark.role === 'peak'} label="Peak" title="Va hacia el final, en lo más alto" onClick={() => setRole('peak')} />
+        <Toggle on={mark.role === 'close'} label="Cierra" title="Va último en esta playlist" onClick={() => setRole('close')} />
+        <Toggle on={!!mark.must} label="Sí o sí" title="No se recorta nunca" onClick={() => setMarks({ [track.id]: { must: !mark.must, extra: undefined } })} />
+        <Toggle on={!!mark.extra} label="Extra" title="Queda de reserva al final" onClick={() => setMarks({ [track.id]: { extra: !mark.extra, must: undefined, role: undefined } })} />
+      </div>
+      <label className="flex items-center gap-2 text-[11.5px] text-faint">
+        Va junto a
+        <select
+          value={mark.with ?? ''}
+          onChange={(e) => setMarks({ [track.id]: { with: e.target.value || undefined } })}
+          className="h-6 min-w-0 flex-1 rounded-[4px] border border-line bg-transparent px-1 text-[11.5px] text-fg outline-none"
+        >
+          <option value="" className="bg-surface">
+            ninguno
+          </option>
+          {order
+            .filter((t) => t.id !== track.id)
+            .map((t) => (
+              <option key={t.id} value={t.id} className="bg-surface">
+                {t.title}
+              </option>
+            ))}
+        </select>
+      </label>
+      <input
+        value={mark.note ?? ''}
+        onChange={(e) => setMarks({ [track.id]: { note: e.target.value } })}
+        placeholder="Nota para este set"
+        aria-label="Nota para este set"
+        className="h-7 w-full rounded-[4px] border border-line bg-transparent px-2 text-[12px] text-fg outline-none placeholder:text-ghost focus:border-line-strong"
+      />
+    </div>
+  )
+}
+
+function Inspector({ track, order, inSet, marks, onMove, onInsert }: { track: Track; order: Track[]; inSet: Set<string>; marks: Marks; onMove: (index: number) => void; onInsert: (id: string, index: number) => void }) {
   const library = useLibrary((s) => s.tracks)
   const select = useUI((s) => s.select)
   const [tab, setTab] = useState<'chapter' | 'library'>('chapter')
@@ -121,6 +199,8 @@ function Inspector({ track, order, inSet, onMove, onInsert }: { track: Track; or
           </div>
         </div>
       </div>
+
+      <MarkEditor track={track} order={order} marks={marks} />
 
       <div className="shrink-0 px-4 pt-3">
         <Segmented
@@ -207,7 +287,9 @@ function Inspector({ track, order, inSet, onMove, onInsert }: { track: Track; or
  * alerta en cada paso que choca, y compatibilidades del tema seleccionado.
  */
 export function ChapterOrder({ chapters, activeId, inSet }: { chapters: { chapter: Chapter; tracks: Track[] }[]; activeId: string | null; inSet: Set<string> }) {
-  const { selectChapter, setChapterTracks, removeTrack, addTrack } = useSets()
+  const { selectChapter, setChapterTracks, removeTrack, addTrack, setMarks } = useSets()
+  const set = useActiveSet()
+  const marks = useMemo(() => set?.marks ?? {}, [set])
   const current = chapters.find((c) => c.chapter.id === activeId) ?? chapters[0]
   const order = useMemo(() => current?.tracks ?? [], [current])
   const [selected, setSelected] = useState<string | null>(null)
@@ -218,7 +300,9 @@ export function ChapterOrder({ chapters, activeId, inSet }: { chapters: { chapte
 
   const sel = order.find((t) => t.id === selected) ?? null
   const steps = useMemo(() => order.slice(1).map((t, i) => step(order[i], t)), [order])
-  const clashes = steps.map((s, i) => ({ s, i })).filter((x) => x.s.clash)
+  // los extras son reserva: sus uniones no cuentan como choques del set
+  const isExtra = (i: number) => !!marks[order[i]?.id]?.extra
+  const clashes = steps.map((s, i) => ({ s, i })).filter((x) => x.s.clash && !isExtra(x.i) && !isExtra(x.i + 1))
   const bpmJumps = steps.filter((s) => s.bpm != null && Math.abs(s.bpm) > BPM_WARN).length
 
   useEffect(() => {
@@ -268,7 +352,19 @@ export function ChapterOrder({ chapters, activeId, inSet }: { chapters: { chapte
 
   if (!current) return <div className="p-6 text-[13px] text-faint">Este set no tiene capítulos.</div>
 
-  const dur = order.reduce((s, t) => s + (t.duration ?? 0), 0)
+  const byId = new Map(order.map((t) => [t.id, t]))
+  const mainTracks = order.filter((t) => !marks[t.id]?.extra)
+  const dur = mainTracks.reduce((s, t) => s + played(t), 0)
+  const sortNow = (m: Marks = marks) => setChapterTracks(current.chapter.id, arrange(order, m).map((t) => t.id))
+  /** Pasa a extras lo que sobra para llegar a la duración, y reordena. */
+  const trim = (minutes: number) => {
+    const ids = trimToMinutes(arrange(order, marks), marks, minutes)
+    if (!ids.length) return notify(dur <= minutes * 60 ? 'Ya entra en esa duración.' : 'No se puede recortar más: lo que queda es sí o sí, tiene rol o va pegado a otro.')
+    const patch = Object.fromEntries(ids.map((id) => [id, { extra: true }]))
+    setMarks(patch)
+    sortNow({ ...marks, ...Object.fromEntries(ids.map((id) => [id, { ...marks[id], extra: true }])) })
+    notify(`${ids.length} temas pasaron a extras.`)
+  }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
@@ -291,7 +387,7 @@ export function ChapterOrder({ chapters, activeId, inSet }: { chapters: { chapte
 
         <div className="flex shrink-0 items-center gap-3 px-5 py-2.5">
           <span className="num text-[11.5px] text-faint">
-            {order.length} temas · {fmtLong(dur)}
+            {mainTracks.length} temas{order.length > mainTracks.length ? ` + ${order.length - mainTracks.length} extras` : ''} · ~{fmtLong(dur)} en mezcla
           </span>
           {order.length > 1 &&
             (clashes.length ? (
@@ -308,7 +404,30 @@ export function ChapterOrder({ chapters, activeId, inSet }: { chapters: { chapte
               <span className="text-[11.5px] text-signal">Todas las transiciones cumplen tus reglas</span>
             ))}
           {bpmJumps > 0 && <span className="text-[11.5px] text-faint">{bpmJumps} saltos de más de {BPM_WARN} BPM</span>}
-          <span className="ml-auto truncate text-[11px] text-ghost">
+          <span className="ml-auto flex shrink-0 items-center gap-1">
+            <Btn variant="line" disabled={order.length < 3} title="Ordena de menos a más por tonalidad, respetando lo que marcaste: abre, cierra, peak, juntos y extras" onClick={() => sortNow()}>
+              <ArrowDownUp size={12} /> Ordenar
+            </Btn>
+            <select
+              aria-label="Recortar a una duración"
+              value=""
+              disabled={order.length < 3}
+              onChange={(e) => e.target.value && trim(Number(e.target.value))}
+              className="h-7 rounded-[5px] border border-line bg-transparent px-1.5 text-[12px] text-soft outline-none hover:border-line-strong hover:text-fg"
+            >
+              <option value="" className="bg-surface">
+                Recortar a
+              </option>
+              {[60, 90, 120, 150].map((m) => (
+                <option key={m} value={m} className="bg-surface">
+                  {fmtLong(m * 60)}
+                </option>
+              ))}
+            </select>
+          </span>
+        </div>
+        <div className="flex shrink-0 px-5 pb-1.5">
+          <span className="truncate text-[11px] text-ghost">
             {sel ? `↔ cómo pega cada tema con «${sel.title}»` : 'Arrastrá para ordenar · ↑↓ elige · Alt + ↑↓ mueve'}
           </span>
         </div>
@@ -360,7 +479,7 @@ export function ChapterOrder({ chapters, activeId, inSet }: { chapters: { chapte
                     'group relative flex h-12 cursor-pointer items-center gap-3 rounded-[6px] px-2 transition-colors',
                     isSel ? 'bg-raised ring-1 ring-line-strong' : 'hover:bg-surface',
                     drag?.id === t.id && 'opacity-40',
-                    vsSel?.clash && 'opacity-45',
+                    (vsSel?.clash || marks[t.id]?.extra) && 'opacity-45',
                   )}
                 >
                   {dropHere && drag.over === i && <span className="absolute inset-x-0 -top-[15px] h-[2px] rounded-full bg-fg" />}
@@ -373,7 +492,10 @@ export function ChapterOrder({ chapters, activeId, inSet }: { chapters: { chapte
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] text-fg">{t.title}</div>
-                    <div className="truncate text-[11.5px] text-faint">{t.artist}</div>
+                    <div className="flex items-center gap-2 text-[11.5px] text-faint">
+                      <span className="truncate">{t.artist}</span>
+                      <MarkBadges mark={marks[t.id]} byId={byId} />
+                    </div>
                   </div>
                   {vsSel && (
                     <span className="w-[92px] shrink-0" title={order.indexOf(sel!) < i ? 'Si va después del seleccionado' : 'Si va antes del seleccionado'}>
@@ -405,14 +527,14 @@ export function ChapterOrder({ chapters, activeId, inSet }: { chapters: { chapte
         </ol>
 
         {toast && (
-          <div role="alert" className="rise pointer-events-none absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-[7px] border border-warn/40 bg-surface px-3 py-2 text-[12px] text-warn">
-            <AlertTriangle size={13} /> {toast}
+          <div role="status" className={cx('rise pointer-events-none absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-[7px] border bg-surface px-3 py-2 text-[12px]', toast.startsWith('Choca') ? 'border-warn/40 text-warn' : 'border-line-strong text-fg')}>
+            {toast.startsWith('Choca') && <AlertTriangle size={13} />} {toast}
           </div>
         )}
       </div>
 
       {sel ? (
-        <Inspector key={sel.id} track={sel} order={order} inSet={inSet} onMove={(index) => moveTo(sel.id, index)} onInsert={(id, index) => addTrack(id, current.chapter.id, index)} />
+        <Inspector key={sel.id} track={sel} order={order} inSet={inSet} marks={marks} onMove={(index) => moveTo(sel.id, index)} onInsert={(id, index) => addTrack(id, current.chapter.id, index)} />
       ) : (
         <aside className="flex w-[340px] shrink-0 flex-col justify-center border-l border-line px-8 text-[12.5px] leading-relaxed text-faint">
           Elegí un tema para ver dónde encaja, cuáles pueden ir antes o después según tus reglas de tonalidad, y cuáles no pueden ir pegados.

@@ -1,4 +1,4 @@
-import type { Track } from './types'
+import type { Marks, Track } from './types'
 import { keyRule, type KeyRule } from './harmony'
 
 const gap = (a: number | null, b: number | null, span: number) =>
@@ -103,24 +103,60 @@ export function nextTracks(last: Track, pool: Track[], limit = 24): Suggestion[]
   return out.sort((a, b) => b.score - a.score).slice(0, limit)
 }
 
+/** Energía para ordenar dentro de un set: si casi todo el set tiene estrellas, mandan las estrellas (el DJ las puso pensando en ese set). */
+function setEnergy(tracks: Track[]): (t: Track) => number {
+  const starred = tracks.filter((t) => t.stars != null).length >= tracks.length * 0.6
+  return (t) => (starred && t.stars != null ? t.stars * 2 : (t.energy ?? 5))
+}
+
 /**
- * Ordena de menos a más energía encadenando tonalidades compatibles.
- * Arranca por el de menor energía y elige cada vez el que mejor sigue.
+ * Ordena una playlist de menos a más encadenando tonalidades compatibles y respetando las marcas del set:
+ * el que abre va primero, el que cierra último, los peak hacia el final, los que van juntos quedan pegados
+ * y los extras se apartan al final, de más a menos energía.
  */
-export function magicSort(tracks: Track[]): Track[] {
-  if (tracks.length < 3) return tracks
-  const rest = [...tracks].sort((a, b) => (a.energy ?? 5) - (b.energy ?? 5))
-  const out = [rest.shift()!]
+export function arrange(tracks: Track[], marks: Marks = {}): Track[] {
+  const mark = (t: Track) => marks[t.id] ?? {}
+  const base = setEnergy(tracks)
+  const energy = (t: Track) => (mark(t).role === 'peak' ? 11 : base(t))
+  const extras = tracks.filter((t) => mark(t).extra).sort((a, b) => base(b) - base(a))
+  const main = tracks.filter((t) => !mark(t).extra)
+  if (main.length < 2) return [...main, ...extras]
+
+  // bloques: los temas marcados "junto a" se mueven como uno solo
+  const ids = new Set(main.map((t) => t.id))
+  const parent = new Map(main.map((t) => [t.id, t.id]))
+  const find = (id: string): string => (parent.get(id) === id ? id : find(parent.get(id)!))
+  for (const t of main) {
+    const w = mark(t).with
+    if (w && ids.has(w)) parent.set(find(t.id), find(w))
+  }
+  const grouped = new Map<string, Track[]>()
+  for (const t of main) grouped.set(find(t.id), [...(grouped.get(find(t.id)) ?? []), t])
+  const blocks = [...grouped.values()].map((ts) => {
+    const sorted = [...ts].sort((a, b) => energy(a) - energy(b))
+    return {
+      tracks: sorted,
+      first: sorted[0],
+      last: sorted[sorted.length - 1],
+      energy: sorted.reduce((s, t) => s + energy(t), 0) / sorted.length,
+      open: sorted.some((t) => mark(t).role === 'open'),
+      close: sorted.some((t) => mark(t).role === 'close'),
+    }
+  })
+  const opener = blocks.find((b) => b.open)
+  const closer = blocks.find((b) => b.close && b !== opener)
+  const rest = blocks.filter((b) => b !== opener && b !== closer).sort((a, b) => a.energy - b.energy)
+  const out = [opener ?? rest.shift()!]
   while (rest.length) {
     const last = out[out.length - 1]
     let best = 0
     let bestScore = -Infinity
-    rest.forEach((t, i) => {
-      const rule = keyRule(last.key, t.key)
-      const keyScore = rule ? rule.score : last.key && t.key ? 0 : 0.3
-      const step = (t.energy ?? 5) - (last.energy ?? 5)
+    rest.forEach((b, i) => {
+      const rule = keyRule(last.last.key, b.first.key)
+      // un choque de tonalidad solo se acepta si no queda ningún tema compatible
+      const keyScore = rule ? rule.score : last.last.key && b.first.key ? -4 : 0.3
       // i es la posición en el orden por energía: cuanto antes, menos salto
-      const score = keyScore * 1.2 - Math.abs(step) * 0.12 - i * 0.04 - gap(last.bpm, t.bpm, 8) * 0.4
+      const score = keyScore * 1.2 - Math.abs(b.energy - last.energy) * 0.12 - i * 0.04 - gap(last.last.bpm, b.first.bpm, 8) * 0.4
       if (score > bestScore) {
         bestScore = score
         best = i
@@ -128,5 +164,44 @@ export function magicSort(tracks: Track[]): Track[] {
     })
     out.push(rest.splice(best, 1)[0])
   }
-  return out
+  if (closer) out.push(closer)
+  return [...out.flatMap((b) => b.tracks), ...extras]
 }
+
+/** Cuánto suena un tema dentro de una mezcla: se pisa con el anterior y el siguiente. */
+export const played = (t: Track) => (t.duration ?? 360) * 0.8
+
+/**
+ * Qué temas pasar a extras para que la playlist dure `minutes` en mezcla.
+ * Nunca toca los sí o sí, los que tienen rol ni los que van pegados a otro, y prefiere
+ * sacar los que dejan una unión válida entre sus vecinos.
+ */
+export function trimToMinutes(ordered: Track[], marks: Marks, minutes: number): string[] {
+  const mark = (t: Track) => marks[t.id] ?? {}
+  const linked = new Set(ordered.map((t) => mark(t).with).filter(Boolean))
+  const main = ordered.filter((t) => !mark(t).extra)
+  const removed: string[] = []
+  let total = main.reduce((s, t) => s + played(t), 0)
+  while (total > minutes * 60) {
+    let best = -1
+    let bestScore = -Infinity
+    main.forEach((t, i) => {
+      const m = mark(t)
+      if (m.must || m.role || m.with || linked.has(t.id)) return
+      const prev = main[i - 1]
+      const next = main[i + 1]
+      const rule = prev && next ? keyRule(prev.key, next.key) : null
+      const score = !prev || !next ? 0.4 : rule ? rule.score : prev.key && next.key ? -1 : 0.3
+      if (score > bestScore) {
+        bestScore = score
+        best = i
+      }
+    })
+    if (best < 0) break
+    total -= played(main[best])
+    removed.push(main.splice(best, 1)[0].id)
+  }
+  return removed
+}
+
+export const magicSort = (tracks: Track[]) => arrange(tracks)
