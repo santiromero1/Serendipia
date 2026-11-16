@@ -23,8 +23,35 @@ const ease = (k) => 1 - Math.pow(1 - clamp(k), 4)
 const inOut = (k) => { k = clamp(k); return k < 0.5 ? 8 * k * k * k * k : 1 - Math.pow(-2 * k + 2, 4) / 2 }
 const span = (t, a, b) => clamp((t - a) / (b - a))
 const hash = (i, s = 1) => { const x = Math.sin(i * 127.1 * s + 311.7) * 43758.5453; return x - Math.floor(x) }
-/** Pulso del bombo: 1 en el golpe, cae rápido. */
-const kick = (t) => Math.pow(1 - ((t / BEAT) % 1), 3)
+/** Audio del tema, analizado cuadro por cuadro: todo lo que pulsa en pantalla sale de acá. */
+const AU = DATA.audio
+const au = (t) => {
+  const f = clamp(t * AU.fps, 0, AU.bass.length - 1), i = Math.floor(f), j = Math.min(AU.bass.length - 1, i + 1), k = f - i
+  const mix = (a) => a[i] + (a[j] - a[i]) * k
+  return { bass: mix(AU.bass), mid: mix(AU.mid), high: mix(AU.high), spec: AU.spec[i] }
+}
+/** Golpe del bombo real del tema, de 0 a 1. */
+const kick = (t) => au(t).bass
+
+/** Espectro en anillo alrededor de un centro: cada barra es una banda de frecuencia. */
+function ring(t, cx, cy, r, alpha, len = 46) {
+  const { spec } = au(t), n = spec.length * 2
+  g.save(); g.strokeStyle = FG; g.lineWidth = 2.2; g.lineCap = 'round'
+  for (let i = 0; i < n; i++) {
+    // espejado: graves arriba y abajo, agudos a los costados
+    const v = spec[i < spec.length ? i : n - 1 - i], an = (i / n) * 6.2832 - 1.5708
+    g.globalAlpha = alpha * (0.18 + 0.82 * v)
+    g.beginPath(); g.moveTo(cx + Math.cos(an) * r, cy + Math.sin(an) * r); g.lineTo(cx + Math.cos(an) * (r + 3 + v * len), cy + Math.sin(an) * (r + 3 + v * len)); g.stroke()
+  }
+  g.restore()
+}
+/** Espectro en línea: barras finas, para las escenas con interfaz. */
+function bars(t, x, y, w, h, alpha) {
+  const { spec } = au(t), step = w / spec.length
+  g.save(); g.fillStyle = FG
+  spec.forEach((v, i) => { g.globalAlpha = alpha * (0.25 + 0.75 * v); g.fillRect(x + i * step, y - v * h, step * 0.5, Math.max(2, v * h)) })
+  g.restore()
+}
 const font = (px, w = 500, mono = false) => `${w} ${px}px ${mono ? '"Geist Mono"' : 'Geist'}, system-ui, sans-serif`
 
 const N = DATA.tracks.length
@@ -49,7 +76,7 @@ function caption(t, a, b, text, { y = H / 2, px = 76, color = FG, align = 'cente
 function drawGalaxy(t, { alpha = 1, form = 1, cam = null, focus = 0, route = 0 } = {}) {
   g.save()
   if (cam) { g.translate(W / 2, H / 2); g.scale(cam.s, cam.s); g.translate(-cam.x, -cam.y) }
-  const k = kick(t)
+  const k = kick(t), a = au(t)
   const pos = (i) => {
     const drift = [Math.sin(t * 0.25 + i) * 14, Math.cos(t * 0.21 + i * 1.7) * 14]
     const f = ease(form - hash(i, 5.1) * 0.35 * (1 - form))
@@ -57,7 +84,7 @@ function drawGalaxy(t, { alpha = 1, form = 1, cam = null, focus = 0, route = 0 }
   }
   // rayos de cada tema al centro de su grupo
   if (form > 0.7) {
-    g.strokeStyle = FG; g.lineWidth = 0.7; g.globalAlpha = alpha * 0.08 * span(form, 0.7, 1) * (focus ? 0.5 : 1)
+    g.strokeStyle = FG; g.lineWidth = 0.7; g.globalAlpha = alpha * (0.05 + 0.1 * k) * span(form, 0.7, 1) * (focus ? 0.5 : 1)
     g.beginPath()
     DATA.tracks.forEach((p, i) => { if (p.cluster == null) return; const [x, y] = pos(i); g.moveTo(x, y); g.lineTo(...hubs[p.cluster]) })
     g.stroke()
@@ -66,16 +93,18 @@ function drawGalaxy(t, { alpha = 1, form = 1, cam = null, focus = 0, route = 0 }
   DATA.tracks.forEach((p, i) => {
     const [x, y] = pos(i)
     const hot = (focus && (i === DATA.focus || nearSet.has(i))) || (route && routeSet.has(i))
-    g.globalAlpha = alpha * (form < 1 ? 0.35 + 0.6 * form : 0.95) * ((focus || route) && !hot ? 0.3 : 1)
+    // cada punto titila con los agudos, a su propio ritmo; el conjunto respira con los medios
+    const tw = a.high * (0.4 + 0.6 * hash(i, 3.7 + Math.floor(t * 8)))
+    g.globalAlpha = clamp(alpha * (form < 1 ? 0.3 + 0.55 * form : 0.8) * ((focus || route) && !hot ? 0.3 : 1) * (0.7 + 0.45 * a.mid + 0.5 * tw))
     g.fillStyle = '#e4e6ea'
-    g.beginPath(); g.arc(x, y, (hot ? 4.6 : 3.1) + (form < 0.05 ? hash(i, 9) * 1.2 : 0), 0, 7); g.fill()
+    g.beginPath(); g.arc(x, y, (hot ? 4.6 : 3.0) + tw * 1.8 + (form < 0.05 ? hash(i, 9) * 1.2 : 0), 0, 7); g.fill()
   })
   // centros de grupo: aparecen de a uno, al golpe
   DATA.clusters.forEach((h, ci) => {
     const born = T_DROP + 2 * BAR + ci * BEAT * 0.5
     const kb = ease(span(t, born, born + 0.35))
     if (!kb || form < 1) return
-    const [x, y] = hubs[ci], r = (6 + Math.sqrt(h.n) * 0.9) * kb * (1 + 0.12 * k)
+    const [x, y] = hubs[ci], r = (6 + Math.sqrt(h.n) * 0.9) * kb * (1 + 0.42 * k)
     g.globalAlpha = alpha * ((focus || route) ? 0.35 : 1)
     g.fillStyle = BG; g.beginPath(); g.arc(x, y, r + 4, 0, 7); g.fill()
     g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill()
@@ -157,7 +186,8 @@ function drawSets(t, alpha) {
       g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1; g.stroke()
       // vinilo esquemático como tapa
       g.strokeStyle = `oklch(0.75 0.06 ${hue} / 0.5)`; g.lineWidth = 1.2
-      for (const rr of [22, 40, 58]) { g.beginPath(); g.arc(x + CARD / 2, yy + CARD / 2, rr, 0, 7); g.stroke() }
+      const beat = kick(t); for (const rr of [22, 40, 58]) { g.globalAlpha = alpha * kc * (0.55 + 0.45 * beat); g.beginPath(); g.arc(x + CARD / 2, yy + CARD / 2, rr * (1 + 0.07 * beat), 0, 7); g.stroke() }
+      g.globalAlpha = alpha * kc
       g.font = font(18); g.fillStyle = FG; g.textAlign = 'left'
       const title = tr.title.length > 19 ? tr.title.slice(0, 18) + '…' : tr.title
       g.fillText(title, x, yy + CARD + 28)
@@ -191,7 +221,8 @@ function logo(t, a) {
   const cx = W / 2, cy = H / 2 - 70
   g.strokeStyle = FG; g.lineWidth = 2
   for (let i = 0; i < 48; i++) { const an = (i / 48) * 6.283 + t * 0.15; g.globalAlpha = k * 0.55; g.fillStyle = FG; g.beginPath(); g.arc(cx + Math.cos(an) * 92, cy + Math.sin(an) * 92, 2.6, 0, 7); g.fill() }
-  g.globalAlpha = k; g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 15 * (1 + 0.1 * kick(t)), 0, 7); g.fill()
+  ring(t, cx, cy, 108, k * 0.7, 60)
+  g.globalAlpha = k; g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 15 * (1 + 0.45 * kick(t)), 0, 7); g.fill()
   for (let i = 0; i < 5; i++) { const an = (i / 5) * 6.283 - t * 0.2; g.beginPath(); g.arc(cx + Math.cos(an) * 46, cy + Math.sin(an) * 46, 6, 0, 7); g.fill() }
   g.font = font(92, 500); g.textAlign = 'center'; g.fillStyle = FG; g.fillText('Serendipia', cx, cy + 210 + (1 - k) * 16)
   const k2 = ease(span(t, a + 0.9, a + 1.6)); g.globalAlpha = k2
@@ -207,6 +238,7 @@ window.render = (t) => {
     g.save(); g.translate(W / 2, H / 2); g.scale(1 - 0.06 * inOut(tension), 1 - 0.06 * inOut(tension)); g.translate(-W / 2, -H / 2)
     drawGalaxy(t, { form: 0, alpha: 0.55 + 0.3 * tension })
     g.restore()
+    bars(t, W / 2 - 300, H - 90, 600, 54, 0.5)
     caption(t, 0.4, 2 * BAR, `${N} temas.`, { px: 104 })
     caption(t, 2 * BAR, 4 * BAR, 'Una pista esperando.', { px: 84 })
     caption(t, 4 * BAR, 6 * BAR, '60 segundos para elegir el próximo.', { px: 72 })
@@ -217,6 +249,9 @@ window.render = (t) => {
     const z = zoomIn * (1 - zoomOut), f = gal[DATA.focus]
     const cam = { s: 1 + 1.5 * z, x: W / 2 + (f[0] - W / 2) * z, y: H / 2 + (f[1] - H / 2) * z }
     const focusT = Math.max(0, t - (T_DROP + 5.5 * BAR))
+    // el golpe empuja la cámara apenas hacia adentro
+    cam.s *= 1 + 0.018 * kick(t)
+    ring(t, W / 2, H / 2, 486, span(u, 0.8 * BAR, 2 * BAR) * (1 - z) * 0.55)
     drawGalaxy(t, { form: span(u, 0, 1.6 * BAR), cam, focus: focusT > 0 && zoomOut < 0.5 ? focusT : 0 })
     caption(t, T_DROP + 0.5 * BAR, T_DROP + 2.5 * BAR, 'Serendipia escucha tu música', { y: 980, px: 46, x: 120, align: 'left' })
     caption(t, T_DROP + 2.5 * BAR, T_DROP + 4.6 * BAR, 'y la ordena por cómo suena.', { y: 980, px: 46, x: 120, align: 'left' })
@@ -226,13 +261,16 @@ window.render = (t) => {
     drawGalaxy(t, { alpha: 0.1 * (1 - fadeIn) + 0.07 })
     g.fillStyle = 'rgba(13,14,16,.55)'; g.fillRect(0, 0, W, H)
     drawSets(t, fadeIn * (1 - fadeOut))
+    bars(t, W - 196 - 360, 150, 360, 46, 0.55 * fadeIn * (1 - fadeOut))
     caption(t, T_SETS + 0.3, T_SETS + 4.6 * BAR, 'Armá el set por capítulos.', { y: 140, px: 50, x: 196, align: 'left' })
     caption(t, T_CLASH, T_FIX, 'Esta mezcla choca.', { y: 140, px: 50, x: 196, align: 'left', color: WARN })
     caption(t, T_FIX, T_ROUTE - 0.1, 'Movés un tema. Listo.', { y: 140, px: 50, x: 196, align: 'left' })
   } else {
     const u = t - T_ROUTE, out = span(t, T_ROUTE + 2 * BAR, T_ROUTE + 2.4 * BAR)
+    ring(t, W / 2, H / 2, 486, 0.5 * (1 - out))
     drawGalaxy(t, { alpha: (0.3 + 0.7 * span(u, 0, 0.5)) * (1 - out), route: ease(span(u, 0.2, 1.7 * BAR)) })
     caption(t, T_ROUTE + 0.3, T_ROUTE + 2 * BAR, 'Tu set, de un vistazo.', { y: 980, px: 46, x: 120, align: 'left' })
+    caption(t, T_ROUTE + 3 * BAR, T_END, DATA.song, { y: H - 70, px: 20, color: FAINT, weight: 400 })
     logo(t, T_ROUTE + 2.3 * BAR)
     const end = span(t, T_END - 0.6, T_END); if (end) { g.fillStyle = BG; g.globalAlpha = end; g.fillRect(0, 0, W, H) }
   }
