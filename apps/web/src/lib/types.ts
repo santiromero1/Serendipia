@@ -31,9 +31,35 @@ export interface Track {
   energySource?: 'estrellas' | 'audio' | null
   dance: number | null
   bright: number | null
-  /** posición en el mapa de cercanía, 0 a 1 */
+  /** posición en la galaxia, 0 a 1 (disco centrado en 0.5, 0.5) */
   x?: number
   y?: number
+  /** grupo sonoro detectado (índice en Library.clusters) */
+  cluster?: number | null
+  /** estilo que el modelo de audio más reconoce en el tema */
+  style?: string | null
+  /** huella sonora comprimida: 48 componentes principales en int8, base64 */
+  emb?: string
+  /** vecinos mutuos más parecidos (ids), para dibujar la red */
+  nn?: string[]
+}
+
+export interface Cluster {
+  id: number
+  label: string
+  n: number
+  x: number
+  y: number
+  styles: string[]
+}
+
+export interface GalaxyReport {
+  temas: number
+  grupos: number
+  raros: number
+  sinGrupo: number
+  genero: { huella: number; simple: number; azar: number }
+  cajon: { huella: number; simple: number; azar: number }
 }
 
 export interface Library {
@@ -42,6 +68,8 @@ export interface Library {
   rekordbox: boolean
   audioAnalysis: boolean
   tracks: Track[]
+  clusters?: Cluster[]
+  galaxy?: GalaxyReport | null
   playlists: { name: string; tracks: string[] }[]
 }
 

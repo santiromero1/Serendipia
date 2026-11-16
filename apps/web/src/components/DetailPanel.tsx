@@ -116,6 +116,12 @@ export function DetailPanel() {
             {track.genre}
             {track.crateName && <span className="text-soft"> · {track.crateName}</span>}
           </dd>
+          {track.style && (
+            <>
+              <dt className="text-faint">Suena a</dt>
+              <dd className="text-fg">{track.style}</dd>
+            </>
+          )}
           <dt className="text-faint">BPM</dt>
           <dd className="num text-fg">
             {track.bpm ?? '–'} {track.bpmSource && <span className="font-sans text-ghost">{track.bpmSource}</span>}

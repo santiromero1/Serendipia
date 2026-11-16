@@ -22,6 +22,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseFile } from 'music-metadata'
 import { UMAP } from 'umap-js'
+import { embed, loadEmbedder, SR as EMBED_SR } from './embed.mjs'
+import { buildGalaxy } from './galaxy.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const WEB = path.resolve(HERE, '..')
@@ -29,6 +31,7 @@ const WEB = path.resolve(HERE, '..')
 const OUT = path.join(WEB, '.library-cache', 'data')
 const COVERS = path.join(OUT, 'covers')
 const CACHE_FILE = path.join(WEB, '.library-cache', 'features.json')
+const EMBED_CACHE_FILE = path.join(WEB, '.library-cache', 'embeddings.json')
 
 const args = process.argv.slice(2)
 const argVal = (name) => {
@@ -302,9 +305,9 @@ function analyze(samples) {
   }
 }
 
-async function decode(file) {
-  const buf = await run('ffmpeg', ['-v', 'error', '-i', file, '-vn', '-ac', '1', '-ar', String(SR), '-f', 'f32le', '-'])
-  if (!buf || buf.length < SR * 4 * 20) return null
+async function decode(file, rate = SR) {
+  const buf = await run('ffmpeg', ['-v', 'error', '-i', file, '-vn', '-ac', '1', '-ar', String(rate), '-f', 'f32le', '-'])
+  if (!buf || buf.length < rate * 4 * 20) return null
   return new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.length / 4))
 }
 
@@ -411,6 +414,8 @@ async function main() {
   await fsp.mkdir(COVERS, { recursive: true })
   await fsp.mkdir(path.dirname(CACHE_FILE), { recursive: true })
   const cache = fs.existsSync(CACHE_FILE) ? JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) : {}
+  const embCache = fs.existsSync(EMBED_CACHE_FILE) ? JSON.parse(fs.readFileSync(EMBED_CACHE_FILE, 'utf8')) : {}
+  const embedder = NO_AUDIO ? null : await loadEmbedder()
   const rb = XML_PATH ? readRekordbox(XML_PATH) : null
 
   const files = (await walk(MUSIC_DIR)).sort()
@@ -420,6 +425,7 @@ async function main() {
   const peaksOut = {}
   let done = 0
   let analyzed = 0
+  let embedded = 0
 
   await pool(files, CONCURRENCY, async (file, idx) => {
     const rel = path.relative(MUSIC_DIR, file).normalize('NFC')
@@ -448,6 +454,16 @@ async function main() {
       cache[key] = feat
       analyzed++
       if (analyzed % 25 === 0) fs.writeFileSync(CACHE_FILE, JSON.stringify(cache))
+    }
+    // huella sonora: cómo suena el tema, sin mirar carpetas ni tags
+    const ekey = `e1|${rel}|${st.size}|${Math.round(st.mtimeMs)}`
+    let sound = embCache[ekey]
+    if (sound === undefined && embedder) {
+      const samples = await decode(file, EMBED_SR)
+      sound = (samples && (await embed(samples))) || null
+      embCache[ekey] = sound
+      embedded++
+      if (embedded % 50 === 0) fs.writeFileSync(EMBED_CACHE_FILE, JSON.stringify(embCache))
     }
     const cover = await extractCover(file, path.join(COVERS, `${id}.jpg`))
 
@@ -479,12 +495,15 @@ async function main() {
       cover,
       added: Math.round(st.birthtimeMs || st.mtimeMs),
       _raw: feat?.raw ?? null,
+      _emb: sound?.emb ?? null,
+      _styles: sound?.styles ?? null,
     }
     if (feat?.peaks) peaksOut[id] = feat.peaks
     done++
     if (done % 50 === 0) console.log(`  ${done}/${files.length}`)
   })
   fs.writeFileSync(CACHE_FILE, JSON.stringify(cache))
+  if (embedded) fs.writeFileSync(EMBED_CACHE_FILE, JSON.stringify(embCache))
 
   // escalas 1 a 10 relativas a la biblioteca
   const raw = (k) => tracks.map((t) => t._raw?.[k] ?? null)
@@ -508,7 +527,7 @@ async function main() {
     delete t._raw
   })
 
-  // mapa de cercanía: sonido + género + cajón
+  // mapa de respaldo (sin huella sonora): medidas simples + género + cajón
   const genres = [...new Set(tracks.map((t) => t.genre))]
   const crates = [...new Set(tracks.map((t) => `${t.genre}/${t.crate ?? ''}`))]
   const zE = zscores(energy)
@@ -532,6 +551,21 @@ async function main() {
     })
   }
 
+  // galaxia: posiciones, grupos y vecinos solo por cómo suena cada tema
+  const galaxy = buildGalaxy(tracks)
+  if (galaxy) {
+    for (const t of tracks) if (!t._emb) delete t.x, delete t.y
+    const r = galaxy.report
+    console.log(`Galaxia: ${r.temas} temas en ${r.grupos} grupos · ${r.raros} raros · ${r.sinGrupo} sin grupo`)
+    console.log(`  vecinos del mismo género: huella ${r.genero.huella}% · medidas simples ${r.genero.simple}% · azar ${r.genero.azar}%`)
+    console.log(`  vecinos del mismo cajón:  huella ${r.cajon.huella}% · medidas simples ${r.cajon.simple}% · azar ${r.cajon.azar}%`)
+    for (const c of galaxy.clusters) console.log(`  ${String(c.n).padStart(4)}  ${c.label}`)
+  }
+  for (const t of tracks) {
+    delete t._emb
+    delete t._styles
+  }
+
   const idByPath = new Map(tracks.map((t) => [path.join(MUSIC_DIR, t.rel).normalize('NFC'), t.id]))
   const playlists = (rb?.playlists ?? [])
     .map((p) => ({ name: p.name, tracks: p.tracks.map((tp) => idByPath.get(tp)).filter(Boolean) }))
@@ -543,6 +577,8 @@ async function main() {
     rekordbox: Boolean(rb),
     audioAnalysis: !NO_AUDIO,
     tracks,
+    clusters: galaxy?.clusters ?? [],
+    galaxy: galaxy?.report ?? null,
     playlists,
   }
   fs.writeFileSync(path.join(OUT, 'library.json'), JSON.stringify(library))

@@ -28,9 +28,12 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "graphology": "^0.26.0",
+    "graphology-communities-louvain": "^2.0.2",
+    "music-metadata": "^11.12.3",
+    "onnxruntime-node": "^1.31.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
-    "vite": "^6.0.5",
-    "music-metadata": "^11.12.3"
+    "vite": "^6.0.5"
   }
 }

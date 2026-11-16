@@ -4,11 +4,40 @@ import { keyRule, type KeyRule } from './harmony'
 const gap = (a: number | null, b: number | null, span: number) =>
   a == null || b == null ? 0.5 : Math.min(1, Math.abs(a - b) / span)
 
+const decoded = new Map<string, Float32Array>()
+/** Huella sonora del tema, normalizada. */
+function fingerprint(t: Track): Float32Array | null {
+  if (!t.emb) return null
+  let v = decoded.get(t.emb)
+  if (!v) {
+    const bin = atob(t.emb)
+    v = new Float32Array(bin.length)
+    let norm = 0
+    for (let i = 0; i < bin.length; i++) {
+      const x = (bin.charCodeAt(i) << 24) >> 24
+      v[i] = x
+      norm += x * x
+    }
+    norm = Math.sqrt(norm) || 1
+    for (let i = 0; i < v.length; i++) v[i] /= norm
+    decoded.set(t.emb, v)
+  }
+  return v
+}
+
 /**
  * Distancia entre dos temas, 0 (iguales) a ~1.5.
- * Sonido (energía, bailabilidad, brillo, BPM) más una penalidad por género y cajón distintos.
+ * Con huella sonora: 1 − coseno entre huellas, más un poco de BPM. No mira carpetas.
+ * Sin huella: energía, bailabilidad, brillo y BPM, más una penalidad por género y cajón distintos.
  */
 export function distance(a: Track, b: Track): number {
+  const fa = fingerprint(a)
+  const fb = fingerprint(b)
+  if (fa && fb) {
+    let dot = 0
+    for (let i = 0; i < fa.length; i++) dot += fa[i] * fb[i]
+    return Math.max(0, 1 - dot) + gap(a.bpm, b.bpm, 12) * 0.15
+  }
   const sound = Math.sqrt(
     (gap(a.energy, b.energy, 9) ** 2 * 1.2 +
       gap(a.dance, b.dance, 9) ** 2 +

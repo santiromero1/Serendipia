@@ -217,10 +217,14 @@ export function mergeAnalysis(base: Library, analysis: Library): Library {
       bright: a.bright,
       x: a.x,
       y: a.y,
+      cluster: a.cluster,
+      style: a.style,
+      emb: a.emb,
+      nn: a.nn,
       cover: a.cover,
       bpm: t.bpm ?? a.bpm,
       bpmSource: t.bpm ? t.bpmSource : a.bpmSource,
     }
   })
-  return { ...base, tracks, audioAnalysis: hits > 0 }
+  return { ...base, tracks, audioAnalysis: hits > 0, clusters: analysis.clusters ?? base.clusters, galaxy: analysis.galaxy ?? base.galaxy }
 }
