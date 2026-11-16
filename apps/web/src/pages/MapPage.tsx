@@ -469,8 +469,8 @@ export function MapPage() {
           <div className="absolute left-1/2 top-6 z-10 w-[min(520px,90%)] -translate-x-1/2 rounded-[8px] border border-line-strong bg-surface p-4">
             <p className="text-[13px] font-medium text-fg">Ubicá tus temas por cómo suenan</p>
             <p className="mb-3 mt-1 text-[12px] leading-relaxed text-faint">
-              Elegí la carpeta donde está tu música. Serendipia escucha cada tema en este navegador y arma el mapa: los parecidos quedan cerca. El audio no se sube a
-              ningún lado. La primera vez tarda unos segundos por tema.
+              El XML ya está cargado. Falta que Serendipia escuche los temas: elegí la carpeta donde está tu música (no el XML) y arma el mapa en este navegador, con los
+              parecidos cerca. La primera vez tarda alrededor de medio segundo por tema.
             </p>
             <AnalyzeMusic big />
           </div>

@@ -34,7 +34,7 @@ Objetivo: un amigo entra a la URL, carga su música y tiene galaxia, sets y cons
 
 1. **Análisis en el navegador.** Hecho. El modelo (ONNX, 18 MB) se baja en el build y corre con onnxruntime-web en un worker; las huellas quedan en IndexedDB. Usa 16 parches por tema en vez de 40: la huella coincide con la del escáner local (coseno medio 0,95) y analiza unos 2 temas por segundo. Falta: energía, bailabilidad y brillo en la web, tapas, y probar con la biblioteca de otra persona.
 2. **Cuentas y sincronización.** Supabase: login, y guardar sets, marcas y huellas (no audio) para que estén en cualquier dispositivo.
-3. **Primer uso guiado.** Recorrido del producto dentro de la app y una página de cómo se usa: exportar el XML, elegir la carpeta, leer la galaxia, armar el primer set.
+3. **Primer uso guiado.** Hecho: recorrido de 7 pasos al primer ingreso y página "Cómo se usa" (ícono de ayuda).
 4. **Escucha en la web.** Hecho para los temas de la carpeta elegida en esa sesión; al recargar hay que volver a elegirla.
 
 Riesgo a resolver antes de cobrar: **la licencia del modelo de audio**. Los modelos de Essentia se publican para uso no comercial; para vender hace falta pedir licencia comercial a la universidad (MTG-UPF) o cambiar de modelo. Verificarlo es el primer paso de esta etapa.

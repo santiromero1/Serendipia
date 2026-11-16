@@ -1,13 +1,15 @@
 import { useEffect } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
-import { Inbox, LayoutList, Lightbulb, Rows3, ScatterChart, SlidersHorizontal } from 'lucide-react'
+import { CircleHelp, Inbox, LayoutList, Lightbulb, Rows3, ScatterChart, SlidersHorizontal } from 'lucide-react'
 import { cx } from '@/components/bits'
 import { DetailPanel } from '@/components/DetailPanel'
 import { FiltersPanel } from '@/components/FiltersPanel'
 import { Welcome } from '@/components/ImportXml'
 import { PlayerBar } from '@/components/PlayerBar'
 import { AdvicePage } from '@/pages/AdvicePage'
+import { GuidePage } from '@/pages/GuidePage'
 import { InboxPage } from '@/pages/InboxPage'
+import { Tour } from '@/components/Tour'
 import { LibraryPage } from '@/pages/LibraryPage'
 import { MapPage } from '@/pages/MapPage'
 import { SetsPage } from '@/pages/SetsPage'
@@ -49,12 +51,20 @@ function Rail() {
           <Icon size={17} strokeWidth={1.6} />
         </NavLink>
       ))}
+      <NavLink
+        to="/guia"
+        title="Cómo se usa"
+        aria-label="Cómo se usa"
+        className={({ isActive }) => cx('mt-auto grid h-9 w-9 place-items-center rounded-[6px] transition-colors', isActive ? 'bg-raised text-fg' : 'text-faint hover:text-soft')}
+      >
+        <CircleHelp size={17} strokeWidth={1.6} />
+      </NavLink>
       <button
         title="Filtros"
         aria-label="Mostrar u ocultar filtros"
         aria-pressed={filtersOpen}
         onClick={toggleFilters}
-        className={cx('relative mt-auto grid h-9 w-9 place-items-center rounded-[6px] transition-colors', filtersOpen ? 'text-fg' : 'text-faint hover:text-soft')}
+        className={cx('relative grid h-9 w-9 place-items-center rounded-[6px] transition-colors', filtersOpen ? 'text-fg' : 'text-faint hover:text-soft')}
       >
         <SlidersHorizontal size={16} strokeWidth={1.6} />
         {count > 0 && <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-signal" />}
@@ -106,12 +116,14 @@ export default function App() {
               <Route path="/sets" element={<SetsPage />} />
               <Route path="/consejos" element={<AdvicePage />} />
               <Route path="/bandeja" element={<InboxPage />} />
+              <Route path="/guia" element={<GuidePage />} />
               <Route path="*" element={<LibraryPage />} />
             </Routes>
           </main>
           <DetailPanel />
         </div>
         <PlayerBar />
+        <Tour />
       </div>
     </BrowserRouter>
   )

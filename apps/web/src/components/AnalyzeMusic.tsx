@@ -14,6 +14,8 @@ export function AnalyzeMusic({ big }: { big?: boolean }) {
   const cancel = useLibrary((s) => s.cancelAnalysis)
   const hasServer = useLibrary((s) => s.hasServer)
   const hasSound = useLibrary((s) => (s.lib?.clusters?.length ?? 0) > 0)
+  const root = useLibrary((s) => s.lib?.root ?? '')
+  const folder = root.split('/').filter(Boolean).pop()
   if (hasServer) return null
 
   const status = !analysis
@@ -48,9 +50,15 @@ export function AnalyzeMusic({ big }: { big?: boolean }) {
           Detener
         </Btn>
       ) : (
-        <Btn variant={big ? 'solid' : 'line'} onClick={() => input.current?.click()} title="El audio no se sube: se analiza en este navegador">
-          <AudioLines size={12} /> {hasSound ? 'Analizar temas nuevos' : 'Analizar mi música'}
+        <Btn variant={big ? 'solid' : 'line'} onClick={() => input.current?.click()} title={`Elegí la carpeta de tu música${folder ? ` (${folder})` : ''}. No el XML: ese ya está cargado.`}>
+          <AudioLines size={12} /> {hasSound ? 'Analizar temas nuevos' : big ? 'Elegir mi carpeta de música' : 'Analizar mi música'}
         </Btn>
+      )}
+      {big && !analysis && root && (
+        <span className="text-[11.5px] leading-relaxed text-faint">
+          Según tu XML, es la carpeta <span className="num text-soft">{root}</span>. Se abre el Finder: elegí esa carpeta entera y tocá Subir. El navegador va a preguntar si querés
+          “subir” los archivos; es solo el permiso para leerlos, no salen de tu compu.
+        </span>
       )}
       {status && <span className={cx('truncate text-[11.5px]', analysis?.error ? 'text-warn' : 'text-faint', !big && 'max-w-[340px]')}>{status}</span>}
       {analysis?.running && analysis.phase === 'temas' && (
