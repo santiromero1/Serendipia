@@ -45,6 +45,11 @@ Riesgo a resolver antes de cobrar: **la licencia del modelo de audio**. Los mode
 2. App de escritorio y video en motion graphics, primero para uso propio.
 3. Comercialización, más adelante: **averiguar un modelo de audio con licencia de uso comercial** (el actual es CC BY-NC-SA 4.0; MTG-UPF ofrece licencia propietaria a pedido), cobro y asistente.
 
+## App de escritorio y video (primera versión, uso propio)
+
+- **App** (`apps/desktop`, Electron): levanta el servidor local dentro de la app, abre su propia ventana, cuenta en el Dock los temas que hay en Descargas y avisa cuando llega uno nuevo. `./install-app.sh` crea `~/Applications/Serendipia.app`. Es un lanzador que corre desde el repo: no es un instalable para pasarle a otra persona. Necesita `ffmpeg` y Node instalados.
+- **Video** (`apps/video`): `scene.html` dibuja cada instante en un canvas y `render.mjs` lo exporta cuadro por cuadro con Chrome y arma el audio. 53 segundos, cortes en compases del tema, sonidos de interfaz sintetizados. Usa posiciones reales de la galaxia y títulos de playlists propias. La salida queda en `apps/video/out/`, fuera del repo, porque lleva música con derechos: para publicarlo hace falta un tema con licencia.
+
 ## Etapa 3 · Producto
 
 1. **App de escritorio** (Tauri) para el flujo de descargas: vigilar carpetas y mover archivos es frágil desde un navegador. La web queda como puerta de entrada.

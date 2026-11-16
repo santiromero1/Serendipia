@@ -29,3 +29,6 @@ apps/web/.library-cache/
 
 # modelo de sonido: se baja en el build
 apps/web/public/models/
+
+# video: la salida incluye música con derechos
+apps/video/out/
