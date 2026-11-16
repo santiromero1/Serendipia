@@ -92,7 +92,7 @@ export function Chips({ track }: { track: Track }) {
   )
 }
 
-export function PlayButton({ id, size = 26, className }: { id: string; size?: number; className?: string }) {
+export function PlayButton({ id, size = 26, className, label }: { id: string; size?: number; className?: string; label?: string }) {
   const active = usePlayer((s) => s.trackId === id)
   const playing = usePlayer((s) => s.playing && s.trackId === id)
   const play = usePlayer((s) => s.play)
@@ -103,7 +103,7 @@ export function PlayButton({ id, size = 26, className }: { id: string; size?: nu
       aria-label={playing ? 'Pausar' : 'Escuchar'}
       onClick={(e) => {
         e.stopPropagation()
-        play(id)
+        play(id, label)
       }}
       style={{ width: size, height: size }}
       className={cx(

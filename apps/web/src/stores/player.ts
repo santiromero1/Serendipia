@@ -5,13 +5,15 @@ if (audio) audio.preload = 'metadata'
 
 interface PlayerState {
   trackId: string | null
+  /** texto a mostrar cuando lo que suena no es un tema de la biblioteca */
+  label: string | null
   playing: boolean
   time: number
   duration: number
   /** escucha rápida: arranca en el cuerpo del tema, no en la intro */
   fastPreview: boolean
   error: string | null
-  play: (id: string) => void
+  play: (id: string, label?: string) => void
   toggle: () => void
   seek: (fraction: number) => void
   setFastPreview: (v: boolean) => void
@@ -28,20 +30,21 @@ export const usePlayer = create<PlayerState>((set, get) => {
   }
   return {
     trackId: null,
+    label: null,
     playing: false,
     time: 0,
     duration: 0,
     fastPreview: true,
     error: null,
 
-    play(id) {
+    play(id, label) {
       if (!audio) return
       if (get().trackId === id) {
         get().toggle()
         return
       }
-      set({ trackId: id, time: 0, duration: 0, error: null })
-      audio.src = `/audio/${id}`
+      set({ trackId: id, label: label ?? null, time: 0, duration: 0, error: null })
+      audio.src = id.startsWith('inbox:') ? `/api/inbox/audio?t=${id.slice(6)}` : `/audio/${id}`
       if (get().fastPreview) {
         audio.addEventListener(
           'loadedmetadata',

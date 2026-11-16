@@ -53,7 +53,7 @@ function Waveform({ peaks, progress, onSeek }: { peaks: number[] | undefined; pr
 }
 
 export function PlayerBar() {
-  const { trackId, playing, time, duration, fastPreview, error, toggle, seek, setFastPreview } = usePlayer()
+  const { trackId, label, playing, time, duration, fastPreview, error, toggle, seek, setFastPreview } = usePlayer()
   const track = useLibrary((s) => (trackId ? s.byId.get(trackId) : undefined))
   const peaks = useLibrary((s) => (trackId ? s.peaks[trackId] : undefined))
   const select = useUI((s) => s.select)
@@ -78,13 +78,13 @@ export function PlayerBar() {
             </span>
           </button>
         ) : (
-          <span className="text-[12px] text-ghost">Nada sonando</span>
+          <span className={cx('truncate text-[12px]', label ? 'text-fg' : 'text-ghost')}>{label ?? 'Nada sonando'}</span>
         )}
       </div>
 
       <button
         aria-label={playing ? 'Pausar' : 'Reproducir'}
-        disabled={!track}
+        disabled={!trackId}
         onClick={toggle}
         className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-fg text-bg transition-colors hover:bg-soft disabled:opacity-30"
       >

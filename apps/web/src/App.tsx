@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
-import { LayoutList, Lightbulb, Rows3, ScatterChart, SlidersHorizontal } from 'lucide-react'
+import { Inbox, LayoutList, Lightbulb, Rows3, ScatterChart, SlidersHorizontal } from 'lucide-react'
 import { cx } from '@/components/bits'
 import { DetailPanel } from '@/components/DetailPanel'
 import { FiltersPanel } from '@/components/FiltersPanel'
 import { Welcome } from '@/components/ImportXml'
 import { PlayerBar } from '@/components/PlayerBar'
 import { AdvicePage } from '@/pages/AdvicePage'
+import { InboxPage } from '@/pages/InboxPage'
 import { LibraryPage } from '@/pages/LibraryPage'
 import { MapPage } from '@/pages/MapPage'
 import { SetsPage } from '@/pages/SetsPage'
@@ -16,6 +17,7 @@ import { usePlayer } from '@/stores/player'
 import { useUI } from '@/stores/ui'
 
 const NAV = [
+  { to: '/bandeja', label: 'Bandeja de descargas', icon: Inbox, local: true },
   { to: '/', label: 'Biblioteca', icon: LayoutList },
   { to: '/mapa', label: 'Mapa', icon: ScatterChart },
   { to: '/sets', label: 'Sets', icon: Rows3 },
@@ -26,12 +28,13 @@ function Rail() {
   const filtersOpen = useUI((s) => s.filtersOpen)
   const toggleFilters = useUI((s) => s.toggleFilters)
   const count = useFilters(activeFilterCount)
+  const canPlay = useLibrary((s) => s.canPlay)
   return (
     <nav className="flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-line py-3" aria-label="Secciones">
       <div className="mb-3 grid h-7 w-7 place-items-center rounded-full border border-line-strong text-[11px] font-semibold text-fg" aria-hidden>
         S
       </div>
-      {NAV.map(({ to, label, icon: Icon }) => (
+      {NAV.filter((n) => canPlay || !('local' in n)).map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
@@ -97,6 +100,7 @@ export default function App() {
               <Route path="/mapa" element={<MapPage />} />
               <Route path="/sets" element={<SetsPage />} />
               <Route path="/consejos" element={<AdvicePage />} />
+              <Route path="/bandeja" element={<InboxPage />} />
               <Route path="*" element={<LibraryPage />} />
             </Routes>
           </main>

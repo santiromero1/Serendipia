@@ -40,7 +40,10 @@ const argVal = (name) => {
 }
 const expand = (p) => (p?.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p)
 const MUSIC_DIR = path.resolve(expand(argVal('--dir') ?? process.env.SERENDIPIA_MUSIC_DIR ?? '~/Music/MUSICA'))
-const XML_PATH = argVal('--xml') ? path.resolve(expand(argVal('--xml'))) : null
+// el XML de rekordbox se recuerda entre corridas: sin él se perderían tonalidades y playlists
+const LAST_XML = path.join(WEB, '.library-cache', 'last-xml.txt')
+const rememberedXml = fs.existsSync(LAST_XML) ? fs.readFileSync(LAST_XML, 'utf8').trim() : null
+const XML_PATH = argVal('--xml') ? path.resolve(expand(argVal('--xml'))) : rememberedXml && fs.existsSync(rememberedXml) ? rememberedXml : null
 const NO_AUDIO = args.includes('--no-audio')
 const AUDIO_EXT = new Set(['.mp3', '.aiff', '.aif', '.wav', '.m4a', '.aac', '.flac'])
 const CONCURRENCY = Math.max(2, Math.min(6, os.cpus().length - 2))
@@ -417,6 +420,7 @@ async function main() {
   const embCache = fs.existsSync(EMBED_CACHE_FILE) ? JSON.parse(fs.readFileSync(EMBED_CACHE_FILE, 'utf8')) : {}
   const embedder = NO_AUDIO ? null : await loadEmbedder()
   const rb = XML_PATH ? readRekordbox(XML_PATH) : null
+  if (XML_PATH) fs.writeFileSync(LAST_XML, XML_PATH)
 
   const files = (await walk(MUSIC_DIR)).sort()
   console.log(`${files.length} archivos de audio en ${MUSIC_DIR}`)
